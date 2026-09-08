@@ -68,14 +68,32 @@ export default function Home() {
   // Helpr function to determine standard font family based on PDF font name
   const matchFontFamily = (pdfFontName) => {
     const fontName = pdfFontName.toLowerCase();
+    
+    // Detect Bold and Italic from font name strings
+    const isBold = fontName.includes('bold') || fontName.includes('black') || fontName.includes('heavy');
+    const isItalic = fontName.includes('italic') || fontName.includes('oblique');
+
+    // Base detection
+    let pdfType = 'Helvetica';
+    let css = 'Arial, Helvetica, sans-serif';
+
     if (fontName.includes('times') || fontName.includes('serif')) {
-      return { css: '"Times New Roman", Times, serif', pdfType: 'TimesRoman' };
+      pdfType = 'TimesRoman';
+      css = '"Times New Roman", Times, serif';
+    } else if (fontName.includes('courier') || fontName.includes('mono')) {
+      pdfType = 'Courier';
+      css = '"Courier New", Courier, monospace';
     }
-    if (fontName.includes('courier') || fontName.includes('mono')) {
-      return { css: '"Courier New", Courier, monospace', pdfType: 'Courier' };
-    }
-    // Default to Sans-Serif (Helvetica/Arial)
-    return { css: 'Arial, Helvetica, sans-serif', pdfType: 'Helvetica' };
+
+    // Apply modifiers for pdflib export
+    if (isBold && isItalic) pdfType += 'BoldItalic';
+    else if (isBold) pdfType += 'Bold';
+    else if (isItalic) pdfType += 'Oblique'; // HelveticaOblique, TimesRomanItalic, CourierOblique
+
+    // Fix specific PDFFont names (Times uses Italic, others use Oblique in StandardFonts)
+    if (pdfType === 'TimesRomanOblique') pdfType = 'TimesRomanItalic';
+    
+    return { css, pdfType, isBold, isItalic };
   };
 
   const renderPage = async (pageNumber) => {
@@ -138,8 +156,11 @@ export default function Home() {
       div.style.left = x + 'px';
       div.style.top = (y - fontSize) + 'px'; 
       div.style.fontSize = fontSize + 'px';
+      
       // Fallback UI ke font standard yang semirip mungkin
       div.style.fontFamily = fontMatch.css;
+      if (fontMatch.isBold) div.style.fontWeight = 'bold';
+      if (fontMatch.isItalic) div.style.fontStyle = 'italic';
       
       div.onclick = () => {
         if(activeTool !== 'edit') return;
@@ -167,11 +188,22 @@ export default function Home() {
     const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
     const doc = await PDFDocument.load(pdfBytes);
     
-    // Daftarkan ke 3 Font standard
+    // Daftarkan ke 3 Font standard beserta variasi tebal miringnya
     const fontCache = {
       Helvetica: await doc.embedFont(StandardFonts.Helvetica),
+      HelveticaBold: await doc.embedFont(StandardFonts.HelveticaBold),
+      HelveticaOblique: await doc.embedFont(StandardFonts.HelveticaOblique),
+      HelveticaBoldOblique: await doc.embedFont(StandardFonts.HelveticaBoldOblique),
+      
       TimesRoman: await doc.embedFont(StandardFonts.TimesRoman),
-      Courier: await doc.embedFont(StandardFonts.Courier)
+      TimesRomanBold: await doc.embedFont(StandardFonts.TimesRomanBold),
+      TimesRomanItalic: await doc.embedFont(StandardFonts.TimesRomanItalic),
+      TimesRomanBoldItalic: await doc.embedFont(StandardFonts.TimesRomanBoldItalic),
+      
+      Courier: await doc.embedFont(StandardFonts.Courier),
+      CourierBold: await doc.embedFont(StandardFonts.CourierBold),
+      CourierOblique: await doc.embedFont(StandardFonts.CourierOblique),
+      CourierBoldOblique: await doc.embedFont(StandardFonts.CourierBoldOblique),
     };
 
     const pages = doc.getPages();
