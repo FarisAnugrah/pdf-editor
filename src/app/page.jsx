@@ -873,12 +873,13 @@ export default function Home() {
             </button>
           </div>
 
-          <div className={`flex flex-col gap-8 pb-10 ${cursorClass}`}>
+          <div className={`flex flex-col items-center gap-8 pb-10 ${cursorClass}`}>
             {Array.from({ length: numPages }).map((_, idx) => (
               <div 
                 key={idx}
                 id={`page-wrapper-${idx}`}
-                className="relative bg-white shadow-2xl transition-transform origin-top"
+                className="relative bg-white shadow-2xl transition-transform origin-top flex-shrink-0"
+                style={{ width: 'fit-content', height: 'fit-content' }}
               >
                 {/* 1. PDF Base */}
                 <canvas 
