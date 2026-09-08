@@ -65,6 +65,19 @@ export default function Home() {
     }
   };
 
+  // Helpr function to determine standard font family based on PDF font name
+  const matchFontFamily = (pdfFontName) => {
+    const fontName = pdfFontName.toLowerCase();
+    if (fontName.includes('times') || fontName.includes('serif')) {
+      return { css: '"Times New Roman", Times, serif', pdfType: 'TimesRoman' };
+    }
+    if (fontName.includes('courier') || fontName.includes('mono')) {
+      return { css: '"Courier New", Courier, monospace', pdfType: 'Courier' };
+    }
+    // Default to Sans-Serif (Helvetica/Arial)
+    return { css: 'Arial, Helvetica, sans-serif', pdfType: 'Helvetica' };
+  };
+
   const renderPage = async (pageNumber) => {
     const page = await pdfDoc.getPage(pageNumber);
     
@@ -114,7 +127,9 @@ export default function Home() {
       div.dataset.y = item.transform[5];
       div.dataset.w = item.width;
       div.dataset.sz = item.transform[0];
-      div.dataset.fontName = item.fontName; // Simpan nama font PDF.js
+      
+      const fontMatch = matchFontFamily(item.fontName || '');
+      div.dataset.fontName = fontMatch.pdfType; // Simpan tipe font standar untuk saat export
       div.dataset.pageIndex = pageNumber - 1;
       
       const [x, y] = viewport.convertToViewportPoint(item.transform[4], item.transform[5]);
@@ -123,8 +138,8 @@ export default function Home() {
       div.style.left = x + 'px';
       div.style.top = (y - fontSize) + 'px'; 
       div.style.fontSize = fontSize + 'px';
-      // Kita usahakan fallback font style mirip dengan font family bawaannya
-      div.style.fontFamily = `"${item.fontName}", sans-serif`;
+      // Fallback UI ke font standard yang semirip mungkin
+      div.style.fontFamily = fontMatch.css;
       
       div.onclick = () => {
         if(activeTool !== 'edit') return;
@@ -152,8 +167,12 @@ export default function Home() {
     const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
     const doc = await PDFDocument.load(pdfBytes);
     
-    // Daftarkan font standar sebagai fallback (PDF-lib tidak bisa gampang pakai custom font bawaan PDF asli tanpa embed file font TTF)
-    const helveticaFont = await doc.embedFont(StandardFonts.Helvetica);
+    // Daftarkan ke 3 Font standard
+    const fontCache = {
+      Helvetica: await doc.embedFont(StandardFonts.Helvetica),
+      TimesRoman: await doc.embedFont(StandardFonts.TimesRoman),
+      Courier: await doc.embedFont(StandardFonts.Courier)
+    };
 
     const pages = doc.getPages();
 
@@ -169,6 +188,7 @@ export default function Home() {
             const pdfY = parseFloat(node.dataset.y);
             const pdfW = parseFloat(node.dataset.w);
             const pdfSz = parseFloat(node.dataset.sz);
+            const pdfType = node.dataset.fontName || 'Helvetica';
             
             // Whiteout (Hapus teks asli)
             page.drawRectangle({
@@ -180,12 +200,11 @@ export default function Home() {
             });
 
             // Tulis Teks Baru pakai Standard Font PDFLib
-            // *Catatan: Untuk font 100% identik, kita butuh file TTF asli. StandardFonts.Helvetica adalah standar paling aman.
             page.drawText(newText, {
                 x: pdfX,
                 y: pdfY,
                 size: pdfSz,
-                font: helveticaFont,
+                font: fontCache[pdfType],
                 color: rgb(0, 0, 0) // Hitam
             });
         });
