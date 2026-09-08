@@ -221,10 +221,16 @@ export default function Home() {
   const startDrawing = (e, idx) => {
     if (!['draw', 'highlight', 'eraser'].includes(activeTool)) return;
     isDrawing.current = true;
-    const rect = drawLayersRef.current[idx].getBoundingClientRect();
+    const canvas = drawLayersRef.current[idx];
+    const rect = canvas.getBoundingClientRect();
+    
+    // Scale correction: coordinate in CSS pixels vs Canvas internal resolution
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
     lastDrawPos.current = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY
     };
   };
 
@@ -233,21 +239,25 @@ export default function Home() {
     const canvas = drawLayersRef.current[idx];
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
     
     ctx.beginPath();
     if (activeTool === 'eraser') {
       ctx.globalCompositeOperation = 'destination-out';
-      ctx.lineWidth = 30;
+      ctx.lineWidth = 30 * (canvas.width / rect.width); // Scale line width
     } else if (activeTool === 'highlight') {
       ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = 'rgba(255, 225, 0, 0.3)';
-      ctx.lineWidth = 20;
+      ctx.lineWidth = 20 * (canvas.width / rect.width);
     } else {
       ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 3 * (canvas.width / rect.width);
     }
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
