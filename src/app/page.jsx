@@ -804,7 +804,7 @@ export default function Home() {
     return (
       <button
         onClick={() => enabled && setActiveTool(id)}
-        className={`flex flex-col items-center justify-center w-14 h-12 rounded-lg transition-all relative group ${
+        className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg transition-all relative group ${
           activeTool === id 
             ? 'bg-blue-50 text-blue-600 shadow-sm' 
             : enabled 
