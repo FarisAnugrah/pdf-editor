@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Upload, Download, Type, Image as ImageIcon, 
   ArrowLeft, MousePointer2, Minus, Plus, 
-  PenTool, Highlighter, Eraser, Spline, Square, FileSignature, 
+  PenTool, Highlighter, Eraser, Spline, Square, Circle, Triangle, FileSignature, 
   Layers, LayoutTemplate, Menu, Edit3,
   Undo2, Redo2
 } from 'lucide-react';
@@ -1016,7 +1016,7 @@ export default function Home() {
             <ToolButton id="signature" icon={FileSignature} label="Sign" />
             <div className="w-px h-8 bg-slate-200 mx-1"></div>
             <ToolButton id="draw" icon={PenTool} label="Draw" shortcut="D" />
-            <ToolButton id="line" icon={Spline, Square} label="Line" />
+            <ToolButton id="line" icon={Spline, Square, Circle, Triangle} label="Line" />
             <ToolButton id="highlight" icon={Highlighter} label="Highlight" shortcut="H" />
             <ToolButton id="eraser" icon={Eraser} label="Erase" />
           </div>
