@@ -19,8 +19,9 @@ export default function Home() {
   const [isDragging, setIsDragging] = useState(false);
   
   const containerRef = useRef(null);
-  const pagesRef = useRef([]); // Store refs for all pages
-  const textLayersRef = useRef([]); // Store text layers for all pages
+  const pagesRef = useRef([]); 
+  const textLayersRef = useRef([]); 
+  const thumbnailsRef = useRef([]); // Store refs for thumbnail canvases
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.pdfjsLib) {
@@ -47,6 +48,7 @@ export default function Home() {
     // Reset arrays based on page count
     pagesRef.current = Array(doc.numPages).fill(null);
     textLayersRef.current = Array(doc.numPages).fill(null);
+    thumbnailsRef.current = Array(doc.numPages).fill(null);
   };
 
   useEffect(() => {
@@ -65,6 +67,24 @@ export default function Home() {
 
   const renderPage = async (pageNumber) => {
     const page = await pdfDoc.getPage(pageNumber);
+    
+    // --- Render Thumbnail ---
+    const thumbCanvas = thumbnailsRef.current[pageNumber - 1];
+    if (thumbCanvas) {
+      // Scale kecil untuk thumbnail (misal lebar ~150px)
+      const unscaledViewport = page.getViewport({scale: 1.0});
+      const thumbScale = 150 / unscaledViewport.width; 
+      const thumbViewport = page.getViewport({scale: thumbScale});
+      
+      thumbCanvas.width = thumbViewport.width;
+      thumbCanvas.height = thumbViewport.height;
+      const thumbCtx = thumbCanvas.getContext('2d');
+      
+      // Render to thumbnail canvas (tanpa await agar tidak memblokir render utama kelamaan)
+      page.render({canvasContext: thumbCtx, viewport: thumbViewport});
+    }
+
+    // --- Render Main Page ---
     const viewport = page.getViewport({scale: zoom});
     
     const canvas = pagesRef.current[pageNumber - 1];
@@ -180,20 +200,27 @@ export default function Home() {
     a.click();
   };
 
-  const ToolButton = ({ id, icon: Icon, label }) => (
-    <button
-      onClick={() => setActiveTool(id)}
-      className={`flex flex-col items-center justify-center w-14 h-12 rounded-lg transition-all ${
-        activeTool === id 
-          ? 'bg-blue-50 text-blue-600 shadow-sm' 
-          : 'text-slate-600 hover:bg-slate-100'
-      }`}
-      title={label}
-    >
-      <Icon size={20} strokeWidth={activeTool === id ? 2.5 : 2} />
-      <span className="text-[10px] mt-1 font-medium">{label}</span>
-    </button>
-  );
+  const ToolButton = ({ id, icon: Icon, label }) => {
+    // Tool yang aktif (PoC)
+    const isWorking = ['edit'].includes(id); 
+    
+    return (
+      <button
+        onClick={() => isWorking && setActiveTool(id)}
+        className={`flex flex-col items-center justify-center w-14 h-12 rounded-lg transition-all relative ${
+          activeTool === id 
+            ? 'bg-blue-50 text-blue-600 shadow-sm' 
+            : isWorking 
+              ? 'text-slate-600 hover:bg-slate-100'
+              : 'text-slate-300 cursor-not-allowed'
+        }`}
+        title={isWorking ? label : `${label} (Coming Soon)`}
+      >
+        <Icon size={20} strokeWidth={activeTool === id ? 2.5 : 2} />
+        <span className="text-[10px] mt-1 font-medium">{label}</span>
+      </button>
+    );
+  };
 
   // Landing Page UI
   if (!file) {
@@ -308,7 +335,11 @@ export default function Home() {
                 }}
               >
                 <div className="relative w-full aspect-[1/1.4] bg-white border-2 border-slate-200 hover:border-blue-500 rounded-lg shadow-sm overflow-hidden flex items-center justify-center transition-colors">
-                  <span className="text-slate-400 font-bold">{idx + 1}</span>
+                  <canvas 
+                    ref={el => thumbnailsRef.current[idx] = el}
+                    className="w-full h-full object-cover"
+                  />
+                  {!thumbnailsRef.current[idx] && <span className="text-slate-400 font-bold absolute">{idx + 1}</span>}
                   <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 </div>
                 <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">Page {idx + 1}</span>
