@@ -200,8 +200,17 @@ export default function Home() {
     setHistoryStep(-1);
   };
 
+  // Ref to track active rendering tasks to prevent cancellation errors
+  const renderTasksRef = useRef([]);
+
   useEffect(() => {
     if (pdfDoc) {
+      // Cancel any ongoing render tasks before starting new ones (e.g. from rapid zooming)
+      renderTasksRef.current.forEach(task => {
+        if (task && task.cancel) task.cancel();
+      });
+      renderTasksRef.current = Array(pdfDoc.numPages).fill(null);
+      
       renderAllPages();
     }
   }, [pdfDoc, zoom]);
@@ -276,7 +285,21 @@ export default function Home() {
     if (!canvas) return;
     canvas.width = viewport.width;
     canvas.height = viewport.height;
-    await page.render({canvasContext: canvas.getContext('2d'), viewport: viewport}).promise;
+    
+    // Store render task to allow cancellation
+    const renderContext = { canvasContext: canvas.getContext('2d'), viewport: viewport };
+    const renderTask = page.render(renderContext);
+    renderTasksRef.current[pageNumber - 1] = renderTask;
+    
+    try {
+      await renderTask.promise;
+    } catch (err) {
+      if (err.name === 'RenderingCancelledException') {
+        // Expected when zooming rapidly, ignore
+        return;
+      }
+      throw err;
+    }
     
     // Draw Layer Setup
     const drawCanvas = drawLayersRef.current[pageNumber - 1];
