@@ -446,7 +446,7 @@ export default function Home() {
 
   // --- DRAWING LOGIC ---
   const startDrawing = (e, idx) => {
-    if (!['draw', 'line', 'rect', 'circle', 'triangle', 'highlight', 'eraser'].includes(activeTool)) return;
+    if (!['draw', 'line', 'rect', 'circle', 'triangle', 'square', 'highlight', 'eraser'].includes(activeTool)) return;
     isDrawing.current = true;
     const canvas = drawLayersRef.current[idx];
     const rect = canvas.getBoundingClientRect();
@@ -798,7 +798,7 @@ export default function Home() {
 
   const ToolButton = ({ id, icon: Icon, label, shortcut }) => {
     // ACTIVE TOOLS CONTROLLED BY THIS ARRAY
-    const isWorking = ['edit', 'add-text', 'image', 'signature', 'draw', 'line', 'rect', 'circle', 'triangle', 'highlight', 'eraser']; 
+    const isWorking = ['edit', 'add-text', 'image', 'signature', 'draw', 'line', 'rect', 'circle', 'triangle', 'square', 'highlight', 'eraser']; 
     const enabled = isWorking.includes(id);
     
     return (
@@ -940,7 +940,7 @@ export default function Home() {
   }
 
   // --- RENDER EDITOR UI ---
-  const isDrawingTool = ['draw', 'line', 'rect', 'circle', 'triangle', 'highlight', 'eraser'].includes(activeTool);
+  const isDrawingTool = ['draw', 'line', 'rect', 'circle', 'triangle', 'square', 'highlight', 'eraser'].includes(activeTool);
   const isTextOrImageTool = ['edit', 'add-text', 'image', 'signature'].includes(activeTool);
   
   // Custom cursor classes
