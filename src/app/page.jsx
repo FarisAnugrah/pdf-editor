@@ -415,30 +415,6 @@ export default function Home() {
       console.warn(`Render error on page ${pageNumber}:`, err);
     }
   };
-      
-      div.onblur = () => {
-        div.contentEditable = false;
-        div.classList.remove('editing');
-        const oldHtml = div.innerHTML;
-        if (div.innerText !== div.dataset.orig) {
-          div.classList.add('edited');
-        } else {
-          div.classList.remove('edited');
-        }
-        // Save snapshot only if content changed
-        if (oldHtml !== div.innerHTML || div.classList.contains('edited')) {
-           saveHistorySnapshot();
-        }
-      };
-      
-      textLayer.appendChild(div);
-    });
-
-    // Save initial snapshot after rendering all pages (debounced/timeout)
-    if (pageNumber === pdfDoc.numPages && historyStep === -1) {
-       setTimeout(saveHistorySnapshot, 500);
-    }
-  };
 
   // --- DRAWING LOGIC ---
   const startDrawing = (e, idx) => {
