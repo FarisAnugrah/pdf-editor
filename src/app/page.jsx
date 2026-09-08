@@ -851,10 +851,10 @@ export default function Home() {
   }
 
   const isDrawingTool = ["draw", "line", "rect", "circle", "triangle", "square", "highlight", "eraser"].includes(activeTool);
-  const isTextOrImageTool = ["edit", "add-text", "image", "signature"].includes(activeTool);
+  const isTextOrImageTool = ['sticky', "edit", "add-text", "image", "signature"].includes(activeTool);
   let cursorClass = "cursor-default";
   if (isDrawingTool) cursorClass = "cursor-crosshair";
-  else if (activeTool === "add-text") cursorClass = "cursor-text";
+  else if (activeTool === "add-text" || activeTool === "sticky") cursorClass = "cursor-text";
   else if (activeTool === "image" || activeTool === "signature") cursorClass = "cursor-crosshair";
 
   return (
