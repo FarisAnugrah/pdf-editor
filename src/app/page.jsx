@@ -38,7 +38,20 @@ export default function Home() {
     }
   }, []);
 
-  // Keyboard shortcuts
+  // Handle zoom scroll
+  useEffect(() => {
+    const handleWheel = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        if (e.deltaY < 0) setZoom(z => Math.min(3, z + 0.1));
+        else setZoom(z => Math.max(0.5, z - 0.1));
+      }
+    };
+    
+    // Non-passive event listener required for preventDefault
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    return () => window.removeEventListener('wheel', handleWheel);
+  }, []);
   useEffect(() => {
     const handleKeyDown = (e) => {
       // Don't trigger if user is typing in a text field
@@ -680,19 +693,25 @@ export default function Home() {
 
         <main className="flex-1 overflow-auto flex justify-center p-8 lg:p-12 pb-32 bg-[#E5E7EB] relative scroll-smooth">
           
-          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md rounded-full shadow-lg border border-slate-200 px-2 py-1.5 flex items-center gap-2 z-40">
+          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-md rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-200/50 px-2 py-1.5 flex items-center gap-1 z-40">
             <button 
               onClick={() => setZoom(z => Math.max(0.5, z - 0.25))}
-              className="p-2 hover:bg-slate-100 rounded-full text-slate-600 transition-colors"
+              className="p-2.5 hover:bg-slate-100 rounded-full text-slate-600 transition-colors"
+              title="Zoom Out (-)"
             >
               <Minus size={18} />
             </button>
-            <div className="w-16 text-center font-semibold text-sm text-slate-700">
+            <div 
+              className="w-16 text-center font-bold text-sm text-slate-700 cursor-pointer hover:bg-slate-100 py-1 rounded"
+              onClick={() => setZoom(1.0)}
+              title="Reset Zoom"
+            >
               {Math.round(zoom * 100)}%
             </div>
             <button 
               onClick={() => setZoom(z => Math.min(3, z + 0.25))}
-              className="p-2 hover:bg-slate-100 rounded-full text-slate-600 transition-colors"
+              className="p-2.5 hover:bg-slate-100 rounded-full text-slate-600 transition-colors"
+              title="Zoom In (+)"
             >
               <Plus size={18} />
             </button>
