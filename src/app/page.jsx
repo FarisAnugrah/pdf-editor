@@ -586,6 +586,53 @@ export default function Home() {
 
   // --- TEXT CLICK LOGIC ---
   const handlePageClick = (e, pageIndex) => {
+    if (activeTool === 'sticky') {
+        const rect = textLayersRef.current[pageIndex].getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const viewport = viewportsRef.current[pageIndex];
+        const [pdfX, pdfY] = viewport.convertToPdfPoint(x, y);
+        const div = document.createElement('div');
+        div.className = 'pdf-text edited new-text sticky-note';
+        div.innerText = 'Note';
+        div.contentEditable = true;
+        div.dataset.orig = '';
+        div.dataset.x = pdfX;
+        div.dataset.y = pdfY;
+        div.dataset.w = 150;
+        div.dataset.sz = 12;
+        div.dataset.fontName = 'Helvetica';
+        div.dataset.pageIndex = pageIndex;
+        div.dataset.isNew = 'true';
+        div.dataset.isSticky = 'true';
+        div.style.left = x + 'px';
+        div.style.top = y + 'px';
+        div.style.fontSize = (12 * zoom) + 'px';
+        div.style.fontFamily = 'Arial, Helvetica, sans-serif';
+        div.style.backgroundColor = '#fef08a';
+        div.style.padding = '8px';
+        div.style.boxShadow = '2px 2px 5px rgba(0,0,0,0.2)';
+        div.style.border = '1px solid #facc15';
+        div.style.borderRadius = '2px';
+        div.style.minWidth = '100px';
+        div.style.minHeight = '50px';
+        div.style.color = '#000000';
+        div.onblur = () => { div.contentEditable = false; div.classList.remove('editing'); saveHistorySnapshot(); };
+        div.onclick = (ev) => { 
+          ev.stopPropagation(); 
+          if (['edit', 'sticky'].includes(activeTool)) { 
+            div.contentEditable = true; 
+            div.classList.add('editing'); 
+            setActiveTextId(div);
+            div.focus(); 
+          } 
+        };
+        textLayersRef.current[pageIndex].appendChild(div);
+        setActiveTextId(div);
+        setTimeout(() => { div.focus(); }, 50);
+        return;
+    }
+
     if (activeTool === 'add-text') {
         const rect = textLayersRef.current[pageIndex].getBoundingClientRect();
         const x = e.clientX - rect.left;
