@@ -18,6 +18,11 @@ export default function Home() {
   const [activeTool, setActiveTool] = useState('edit');
   const [isDragging, setIsDragging] = useState(false);
   
+  // Customization controls
+  const [textColor, setTextColor] = useState('#000000');
+  const [textSize, setTextSize] = useState(14);
+  const [activeTextId, setActiveTextId] = useState(null);
+  
   const containerRef = useRef(null);
   const pagesRef = useRef([]); 
   const textLayersRef = useRef([]); 
@@ -372,6 +377,7 @@ export default function Home() {
         div.style.left = x + 'px';
         div.style.top = (y - fontSize) + 'px'; 
         div.style.fontSize = fontSize + 'px';
+        div.style.color = '#000000'; // Default color
         
         div.style.fontFamily = fontMatch.css;
         if (fontMatch.isBold) div.style.fontWeight = 'bold';
@@ -384,12 +390,18 @@ export default function Home() {
           if(activeTool !== 'edit') return;
           div.contentEditable = true;
           div.classList.add('editing');
+          setActiveTextId(div);
           div.focus();
         };
         
         div.onblur = () => {
           div.contentEditable = false;
           div.classList.remove('editing');
+          // Delay clearing active text to allow formatting clicks
+          setTimeout(() => {
+             if (document.activeElement !== div) setActiveTextId(null);
+          }, 200);
+          
           const oldHtml = div.innerHTML;
           if (div.innerText !== div.dataset.orig) {
             div.classList.add('edited');
@@ -533,6 +545,7 @@ export default function Home() {
         div.style.left = x + 'px';
         div.style.top = (y - 14 * zoom) + 'px'; 
         div.style.fontSize = (14 * zoom) + 'px';
+        div.style.color = textColor;
         div.style.fontFamily = 'Arial, Helvetica, sans-serif';
         div.style.whiteSpace = 'nowrap';
         div.style.minWidth = '20px';
@@ -540,18 +553,21 @@ export default function Home() {
         div.onblur = () => { 
           div.contentEditable = false; 
           div.classList.remove('editing'); 
-          saveHistorySnapshot(); // Capture new text added
+          setTimeout(() => { if (document.activeElement !== div) setActiveTextId(null); }, 200);
+          saveHistorySnapshot(); 
         };
         div.onclick = (ev) => { 
           ev.stopPropagation(); 
           if (['edit', 'add-text'].includes(activeTool)) { 
             div.contentEditable = true; 
             div.classList.add('editing'); 
+            setActiveTextId(div);
             div.focus(); 
           } 
         };
 
         textLayersRef.current[pageIndex].appendChild(div);
+        setActiveTextId(div);
         setTimeout(() => { div.focus(); }, 50);
 
     } else if (activeTool === 'image' || activeTool === 'signature') {
@@ -563,7 +579,41 @@ export default function Home() {
     }
   };
 
-  // --- EXPORT LOGIC ---
+  // Apply color change to active text
+  useEffect(() => {
+    if (activeTextId && activeTool === 'edit') {
+       activeTextId.style.color = textColor;
+       saveHistorySnapshot();
+    }
+  }, [textColor]);
+
+  // Apply size change to active text
+  useEffect(() => {
+    if (activeTextId && activeTool === 'edit') {
+       activeTextId.style.fontSize = (textSize * zoom) + 'px';
+       activeTextId.dataset.sz = textSize;
+       saveHistorySnapshot();
+    }
+  }, [textSize]);
+  const hexToRgb = (hex) => {
+    // Default to black if format is wrong
+    if (!hex || hex[0] !== '#') return { r: 0, g: 0, b: 0 }; 
+    // Handle rgb/rgba string from DOM
+    if (hex.startsWith('rgb')) {
+       const rgbVals = hex.match(/\d+/g);
+       if(rgbVals && rgbVals.length >= 3) {
+         return { r: parseInt(rgbVals[0])/255, g: parseInt(rgbVals[1])/255, b: parseInt(rgbVals[2])/255 };
+       }
+    }
+    // Handle hex
+    let cleanHex = hex.replace('#', '');
+    if (cleanHex.length === 3) cleanHex = cleanHex.split('').map(c => c + c).join('');
+    const r = parseInt(cleanHex.substring(0, 2), 16) / 255;
+    const g = parseInt(cleanHex.substring(2, 4), 16) / 255;
+    const b = parseInt(cleanHex.substring(4, 6), 16) / 255;
+    return { r: r||0, g: g||0, b: b||0 };
+  };
+
   const handleSave = async () => {
     if(!pdfBytes) return;
     const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
@@ -600,6 +650,7 @@ export default function Home() {
             const pdfW = parseFloat(node.dataset.w);
             const pdfSz = parseFloat(node.dataset.sz);
             const pdfType = node.dataset.fontName || 'Helvetica';
+            const colorRgb = hexToRgb(node.style.color || '#000000');
             
             if (node.dataset.isNew !== 'true') {
                 page.drawRectangle({
@@ -615,7 +666,7 @@ export default function Home() {
                 y: pdfY,
                 size: pdfSz,
                 font: fontCache[pdfType],
-                color: rgb(0, 0, 0)
+                color: rgb(colorRgb.r, colorRgb.g, colorRgb.b)
             });
         });
 
@@ -868,17 +919,39 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="hidden md:flex items-center gap-1 bg-white border border-slate-200 shadow-sm rounded-xl p-1.5 z-40 absolute left-1/2 -translate-x-1/2">
-          <ToolButton id="edit" icon={MousePointer2} label="Edit Text" shortcut="E" />
-          <div className="w-px h-8 bg-slate-200 mx-1"></div>
-          <ToolButton id="add-text" icon={Type} label="Add Text" shortcut="T" />
-          <ToolButton id="image" icon={ImageIcon} label="Image" shortcut="I" />
-          <ToolButton id="signature" icon={FileSignature} label="Sign" />
-          <div className="w-px h-8 bg-slate-200 mx-1"></div>
-          <ToolButton id="draw" icon={PenTool} label="Draw" shortcut="D" />
-          <ToolButton id="highlight" icon={Highlighter} label="Highlight" shortcut="H" />
-          <ToolButton id="eraser" icon={Eraser} label="Erase" />
-        </div>
+          <div className="hidden md:flex items-center gap-1 bg-white border border-slate-200 shadow-sm rounded-xl p-1.5 z-40 absolute left-1/2 -translate-x-1/2">
+            <ToolButton id="edit" icon={MousePointer2} label="Edit Text" shortcut="E" />
+            <div className="w-px h-8 bg-slate-200 mx-1"></div>
+            <ToolButton id="add-text" icon={Type} label="Add Text" shortcut="T" />
+            
+            {/* Contextual Text Formatting Toolbar */}
+            {activeTool === 'edit' && activeTextId && (
+              <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-lg px-2 ml-1 animate-in fade-in zoom-in duration-200">
+                <input 
+                  type="color" 
+                  value={textColor} 
+                  onChange={(e) => setTextColor(e.target.value)}
+                  className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent p-0"
+                  title="Text Color"
+                />
+                <input 
+                  type="number" 
+                  value={textSize}
+                  onChange={(e) => setTextSize(parseInt(e.target.value) || 14)}
+                  className="w-12 h-7 text-xs border border-slate-200 rounded text-center"
+                  min="6" max="72"
+                  title="Font Size"
+                />
+              </div>
+            )}
+            
+            <ToolButton id="image" icon={ImageIcon} label="Image" shortcut="I" />
+            <ToolButton id="signature" icon={FileSignature} label="Sign" />
+            <div className="w-px h-8 bg-slate-200 mx-1"></div>
+            <ToolButton id="draw" icon={PenTool} label="Draw" shortcut="D" />
+            <ToolButton id="highlight" icon={Highlighter} label="Highlight" shortcut="H" />
+            <ToolButton id="eraser" icon={Eraser} label="Erase" />
+          </div>
         
         <div className="flex items-center justify-end gap-3 w-1/4">
           <button onClick={handleSave} className="flex items-center gap-2 bg-red-500 hover:bg-red-600 shadow-sm hover:shadow text-white px-5 py-2.5 rounded-full font-bold text-sm transition-all">
