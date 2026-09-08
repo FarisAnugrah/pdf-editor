@@ -71,6 +71,7 @@ export default function Home() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+  const handleFileUpload = async (e) => {
     const f = e.target?.files?.[0] || e.dataTransfer?.files?.[0];
     if (!f || f.type !== 'application/pdf') return;
     
