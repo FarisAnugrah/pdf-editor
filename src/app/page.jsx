@@ -38,7 +38,26 @@ export default function Home() {
     }
   }, []);
 
-  const handleFileUpload = async (e) => {
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Don't trigger if user is typing in a text field
+      if (document.activeElement.isContentEditable) return;
+      
+      switch(e.key.toLowerCase()) {
+        case 'e': setActiveTool('edit'); break;
+        case 't': setActiveTool('add-text'); break;
+        case 'i': setActiveTool('image'); break;
+        case 'd': setActiveTool('draw'); break;
+        case 'h': setActiveTool('highlight'); break;
+        case '-': setZoom(z => Math.max(0.5, z - 0.25)); break;
+        case '=': 
+        case '+': setZoom(z => Math.min(3, z + 0.25)); break;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
     const f = e.target?.files?.[0] || e.dataTransfer?.files?.[0];
     if (!f || f.type !== 'application/pdf') return;
     
@@ -431,7 +450,7 @@ export default function Home() {
     a.click();
   };
 
-  const ToolButton = ({ id, icon: Icon, label }) => {
+  const ToolButton = ({ id, icon: Icon, label, shortcut }) => {
     // ACTIVE TOOLS CONTROLLED BY THIS ARRAY
     const isWorking = ['edit', 'add-text', 'image', 'signature', 'draw', 'highlight', 'eraser']; 
     const enabled = isWorking.includes(id);
@@ -439,17 +458,22 @@ export default function Home() {
     return (
       <button
         onClick={() => enabled && setActiveTool(id)}
-        className={`flex flex-col items-center justify-center w-14 h-12 rounded-lg transition-all relative ${
+        className={`flex flex-col items-center justify-center w-14 h-12 rounded-lg transition-all relative group ${
           activeTool === id 
             ? 'bg-blue-50 text-blue-600 shadow-sm' 
             : enabled 
               ? 'text-slate-600 hover:bg-slate-100'
               : 'text-slate-300 cursor-not-allowed'
         }`}
-        title={enabled ? label : `${label} (Coming Soon)`}
       >
         <Icon size={20} strokeWidth={activeTool === id ? 2.5 : 2} />
         <span className="text-[10px] mt-1 font-medium">{label}</span>
+        
+        {/* Tooltip */}
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+          {label} {shortcut && <span className="opacity-60 ml-1">({shortcut})</span>}
+          {!enabled && <span className="text-red-300 ml-1">(Coming Soon)</span>}
+        </div>
       </button>
     );
   };
@@ -590,14 +614,14 @@ export default function Home() {
         </div>
 
         <div className="hidden md:flex items-center gap-1 bg-white border border-slate-200 shadow-sm rounded-xl p-1.5 z-40 absolute left-1/2 -translate-x-1/2">
-          <ToolButton id="edit" icon={MousePointer2} label="Edit Text" />
+          <ToolButton id="edit" icon={MousePointer2} label="Edit Text" shortcut="E" />
           <div className="w-px h-8 bg-slate-200 mx-1"></div>
-          <ToolButton id="add-text" icon={Type} label="Add Text" />
-          <ToolButton id="image" icon={ImageIcon} label="Image" />
+          <ToolButton id="add-text" icon={Type} label="Add Text" shortcut="T" />
+          <ToolButton id="image" icon={ImageIcon} label="Image" shortcut="I" />
           <ToolButton id="signature" icon={FileSignature} label="Sign" />
           <div className="w-px h-8 bg-slate-200 mx-1"></div>
-          <ToolButton id="draw" icon={PenTool} label="Draw" />
-          <ToolButton id="highlight" icon={Highlighter} label="Highlight" />
+          <ToolButton id="draw" icon={PenTool} label="Draw" shortcut="D" />
+          <ToolButton id="highlight" icon={Highlighter} label="Highlight" shortcut="H" />
           <ToolButton id="eraser" icon={Eraser} label="Erase" />
         </div>
         
