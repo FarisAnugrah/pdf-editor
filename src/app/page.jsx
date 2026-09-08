@@ -758,7 +758,7 @@ export default function Home() {
 
   const ToolButton = ({ id, icon: Icon, label, shortcut }) => {
     // ACTIVE TOOLS CONTROLLED BY THIS ARRAY
-    const isWorking = ['edit', 'add-text', 'image', 'signature', 'draw', 'highlight', 'eraser']; 
+    const isWorking = ['edit', 'add-text', 'image', 'signature', 'draw', 'line', 'highlight', 'eraser']; 
     const enabled = isWorking.includes(id);
     
     return (
