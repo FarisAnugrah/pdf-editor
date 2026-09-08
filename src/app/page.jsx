@@ -1050,7 +1050,8 @@ export default function Home() {
                     className="w-full h-full object-cover"
                   />
                   {!thumbnailsRef.current[idx] && <span className="text-slate-400 font-bold absolute">{idx + 1}</span>
-                  <button className="absolute top-1 right-1 w-6 h-6 bg-red-500 rounded text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-red-600 shadow" title="Delete Page" onClick={(e)=>{e.stopPropagation(); handlePageDelete(idx);}}>X</button>}
+                  <button className="absolute top-1 right-1 w-6 h-6 bg-red-500 rounded text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-red-600 shadow" title="Delete Page" onClick={(e)=>{e.stopPropagation(); handlePageDelete(idx);}}>X</button>
+                  <button className="absolute bottom-1 right-1 w-6 h-6 bg-blue-500 rounded text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-blue-600 shadow" title="Rotate Page" onClick={(e)=>{e.stopPropagation(); handlePageRotate(idx);}}>↻</button>}
                   <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 </div>
                 <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">Page {idx + 1}</span>
