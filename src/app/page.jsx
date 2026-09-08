@@ -135,10 +135,6 @@ export default function Home() {
       document.addEventListener('mouseup', onUp);
   };
 
-  // Drawing state
-  const isDrawing = useRef(false);
-  const lastDrawPos = useRef({ x: 0, y: 0 });
-
   useEffect(() => {
     if (typeof window !== 'undefined' && window.pdfjsLib) {
       window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
