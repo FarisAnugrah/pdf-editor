@@ -980,9 +980,12 @@ export default function Home() {
             <ToolButton id="eraser" icon={Eraser} label="Erase" />
           </div>
         
-          <div className="flex items-center justify-end gap-3 w-1/4">
-            <button 
-              onClick={handleSave} 
+        <div className="flex items-center justify-end gap-3 w-1/4">
+          <div className="hidden lg:flex items-center gap-2 mr-4 text-sm font-medium text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+            <span>Pages: {numPages}</span>
+          </div>
+          <button 
+            onClick={handleSave} 
               disabled={isExporting}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-bold text-sm transition-all shadow-sm ${
                 isExporting ? 'bg-slate-300 text-slate-500 cursor-wait' : 'bg-red-500 hover:bg-red-600 hover:shadow text-white'
