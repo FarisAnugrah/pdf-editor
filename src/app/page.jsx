@@ -317,7 +317,7 @@ export default function Home() {
       
       // Thumbnail rendering with concurrency protection
       const thumbCanvas = thumbnailsRef.current[pageNumber - 1];
-      if (thumbCanvas) {
+      if (thumbCanvas && !thumbCanvas.dataset.rendered) {
         const unscaledViewport = page.getViewport({scale: 1.0});
         const thumbScale = 150 / unscaledViewport.width; 
         const thumbViewport = page.getViewport({scale: thumbScale});
@@ -325,11 +325,11 @@ export default function Home() {
         thumbCanvas.width = thumbViewport.width;
         thumbCanvas.height = thumbViewport.height;
         
-        // Prevent concurrent thumb render collision
         if (!thumbCanvas.dataset.rendering) {
           thumbCanvas.dataset.rendering = "true";
           try {
             await page.render({canvasContext: thumbCanvas.getContext('2d'), viewport: thumbViewport}).promise;
+            thumbCanvas.dataset.rendered = "true";
           } catch(e) { /* ignore thumb errors */ }
           finally { thumbCanvas.dataset.rendering = ""; }
         }
