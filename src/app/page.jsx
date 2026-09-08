@@ -812,12 +812,12 @@ export default function Home() {
 
         <main className="flex-1 flex flex-col items-center pt-20 px-4 pb-24 relative overflow-hidden">
           
-          <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-b from-blue-50 to-transparent rounded-full blur-3xl -z-10 opacity-70 pointer-events-none"></div>
-          <div className="absolute -left-32 top-32 w-72 h-72 bg-rose-50 rounded-full blur-3xl -z-10 opacity-60 pointer-events-none"></div>
-          <div className="absolute -right-32 top-64 w-96 h-96 bg-blue-50 rounded-full blur-3xl -z-10 opacity-60 pointer-events-none"></div>
+          <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-b from-blue-50 to-transparent rounded-full blur-3xl -z-10 opacity-70 pointer-events-none animate-pulse duration-1000"></div>
+          <div className="absolute -left-32 top-32 w-72 h-72 bg-rose-50 rounded-full blur-3xl -z-10 opacity-60 pointer-events-none mix-blend-multiply animate-blob"></div>
+          <div className="absolute -right-32 top-64 w-96 h-96 bg-blue-50 rounded-full blur-3xl -z-10 opacity-60 pointer-events-none mix-blend-multiply animate-blob animation-delay-2000"></div>
 
-          <div className="text-center max-w-4xl mx-auto mb-14 px-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 font-semibold text-sm mb-6 border border-blue-100">
+          <div className="text-center max-w-4xl mx-auto mb-14 px-4 animate-in slide-in-from-bottom-8 fade-in duration-1000">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 font-semibold text-sm mb-6 border border-blue-100 shadow-sm">
               <span className="flex h-2 w-2 relative">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
