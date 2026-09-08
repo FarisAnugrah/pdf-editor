@@ -900,7 +900,7 @@ export default function Home() {
   }
 
   // --- RENDER EDITOR UI ---
-  const isDrawingTool = ['draw', 'highlight', 'eraser'].includes(activeTool);
+  const isDrawingTool = ['draw', 'line', 'rect', 'highlight', 'eraser'].includes(activeTool);
   const isTextOrImageTool = ['edit', 'add-text', 'image', 'signature'].includes(activeTool);
   
   // Custom cursor classes
