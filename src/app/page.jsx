@@ -809,6 +809,18 @@ export default function Home() {
             const pdfType = node.dataset.fontName || 'Helvetica';
             const colorRgb = hexToRgb(node.style.color || '#000000');
             
+              if (node.dataset.isSticky === 'true') {
+                  page.drawRectangle({
+                      x: pdfX - 4,
+                      y: pdfY - (pdfSz * 1.5) - 4,
+                      width: Math.max(100, newText.length * (pdfSz * 0.5) + 8),
+                      height: pdfSz * 2.5 + 8,
+                      color: rgb(254/255, 240/255, 138/255),
+                      borderColor: rgb(250/255, 204/255, 21/255),
+                      borderWidth: 1
+                  });
+              }
+
             if (node.dataset.isNew !== 'true') {
                 page.drawRectangle({
                     x: pdfX, 
