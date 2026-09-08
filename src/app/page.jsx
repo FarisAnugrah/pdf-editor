@@ -8,6 +8,8 @@ import {
   Undo2, Redo2
 } from 'lucide-react';
 
+import { Toaster, toast } from 'sonner';
+
 export default function Home() {
   const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState('');
@@ -17,6 +19,8 @@ export default function Home() {
   const [zoom, setZoom] = useState(1.2);
   const [activeTool, setActiveTool] = useState('edit');
   const [isDragging, setIsDragging] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isDocumentLoading, setIsDocumentLoading] = useState(false);
   
   // Customization controls
   const [textColor, setTextColor] = useState('#000000');
@@ -181,28 +185,40 @@ export default function Home() {
   }, []);
   const handleFileUpload = async (e) => {
     const f = e.target?.files?.[0] || e.dataTransfer?.files?.[0];
-    if (!f || f.type !== 'application/pdf') return;
+    if (!f || f.type !== 'application/pdf') {
+       toast.error("Please upload a valid PDF file.");
+       return;
+    }
     
+    setIsDocumentLoading(true);
     setFile(f);
     setFileName(f.name);
     
-    const bytes = await f.arrayBuffer();
-    setPdfBytes(bytes);
-    
-    const loadingTask = window.pdfjsLib.getDocument({data: bytes});
-    const doc = await loadingTask.promise;
-    setPdfDoc(doc);
-    setNumPages(doc.numPages);
-    
-    pagesRef.current = Array(doc.numPages).fill(null);
-    textLayersRef.current = Array(doc.numPages).fill(null);
-    drawLayersRef.current = Array(doc.numPages).fill(null);
-    thumbnailsRef.current = Array(doc.numPages).fill(null);
-    viewportsRef.current = Array(doc.numPages).fill(null);
-    
-    // Reset History
-    setHistory([]);
-    setHistoryStep(-1);
+    try {
+      const bytes = await f.arrayBuffer();
+      setPdfBytes(bytes);
+      
+      const loadingTask = window.pdfjsLib.getDocument({data: bytes});
+      const doc = await loadingTask.promise;
+      setPdfDoc(doc);
+      setNumPages(doc.numPages);
+      
+      pagesRef.current = Array(doc.numPages).fill(null);
+      textLayersRef.current = Array(doc.numPages).fill(null);
+      drawLayersRef.current = Array(doc.numPages).fill(null);
+      thumbnailsRef.current = Array(doc.numPages).fill(null);
+      viewportsRef.current = Array(doc.numPages).fill(null);
+      
+      setHistory([]);
+      setHistoryStep(-1);
+      toast.success("Document loaded successfully!");
+    } catch (err) {
+      toast.error("Failed to read PDF document.");
+      console.error(err);
+      setFile(null);
+    } finally {
+      setIsDocumentLoading(false);
+    }
   };
 
   // Ref to track active rendering tasks to prevent cancellation errors
@@ -616,25 +632,29 @@ export default function Home() {
 
   const handleSave = async () => {
     if(!pdfBytes) return;
-    const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
-    const doc = await PDFDocument.load(pdfBytes);
-    
-    const fontCache = {
-      Helvetica: await doc.embedFont(StandardFonts.Helvetica),
-      HelveticaBold: await doc.embedFont(StandardFonts.HelveticaBold),
-      HelveticaOblique: await doc.embedFont(StandardFonts.HelveticaOblique),
-      HelveticaBoldOblique: await doc.embedFont(StandardFonts.HelveticaBoldOblique),
-      TimesRoman: await doc.embedFont(StandardFonts.TimesRoman),
-      TimesRomanBold: await doc.embedFont(StandardFonts.TimesRomanBold),
-      TimesRomanItalic: await doc.embedFont(StandardFonts.TimesRomanItalic),
-      TimesRomanBoldItalic: await doc.embedFont(StandardFonts.TimesRomanBoldItalic),
-      Courier: await doc.embedFont(StandardFonts.Courier),
-      CourierBold: await doc.embedFont(StandardFonts.CourierBold),
-      CourierOblique: await doc.embedFont(StandardFonts.CourierOblique),
-      CourierBoldOblique: await doc.embedFont(StandardFonts.CourierBoldOblique),
-    };
+    setIsExporting(true);
+    const toastId = toast.loading('Preparing your document for export...');
 
-    const pages = doc.getPages();
+    try {
+      const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
+      const doc = await PDFDocument.load(pdfBytes);
+      
+      const fontCache = {
+        Helvetica: await doc.embedFont(StandardFonts.Helvetica),
+        HelveticaBold: await doc.embedFont(StandardFonts.HelveticaBold),
+        HelveticaOblique: await doc.embedFont(StandardFonts.HelveticaOblique),
+        HelveticaBoldOblique: await doc.embedFont(StandardFonts.HelveticaBoldOblique),
+        TimesRoman: await doc.embedFont(StandardFonts.TimesRoman),
+        TimesRomanBold: await doc.embedFont(StandardFonts.TimesRomanBold),
+        TimesRomanItalic: await doc.embedFont(StandardFonts.TimesRomanItalic),
+        TimesRomanBoldItalic: await doc.embedFont(StandardFonts.TimesRomanBoldItalic),
+        Courier: await doc.embedFont(StandardFonts.Courier),
+        CourierBold: await doc.embedFont(StandardFonts.CourierBold),
+        CourierOblique: await doc.embedFont(StandardFonts.CourierOblique),
+        CourierBoldOblique: await doc.embedFont(StandardFonts.CourierBoldOblique),
+      };
+
+      const pages = doc.getPages();
 
     for (let index = 0; index < pages.length; index++) {
         const page = pages[index];
@@ -727,6 +747,13 @@ export default function Home() {
     a.href = url;
     a.download = `edited_${fileName}`;
     a.click();
+    toast.success('Document exported successfully!', { id: toastId });
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to export document.', { id: toastId });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const ToolButton = ({ id, icon: Icon, label, shortcut }) => {
@@ -953,12 +980,22 @@ export default function Home() {
             <ToolButton id="eraser" icon={Eraser} label="Erase" />
           </div>
         
-        <div className="flex items-center justify-end gap-3 w-1/4">
-          <button onClick={handleSave} className="flex items-center gap-2 bg-red-500 hover:bg-red-600 shadow-sm hover:shadow text-white px-5 py-2.5 rounded-full font-bold text-sm transition-all">
-            <Download size={18} />
-            Export
-          </button>
-        </div>
+          <div className="flex items-center justify-end gap-3 w-1/4">
+            <button 
+              onClick={handleSave} 
+              disabled={isExporting}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-full font-bold text-sm transition-all shadow-sm ${
+                isExporting ? 'bg-slate-300 text-slate-500 cursor-wait' : 'bg-red-500 hover:bg-red-600 hover:shadow text-white'
+              }`}
+            >
+              {isExporting ? (
+                <div className="w-4 h-4 border-2 border-slate-500 border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <Download size={18} />
+              )}
+              {isExporting ? 'Exporting...' : 'Export'}
+            </button>
+          </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden relative">
