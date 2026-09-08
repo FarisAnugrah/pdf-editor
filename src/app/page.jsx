@@ -4,7 +4,7 @@ import {
   Upload, Download, Type, Image as ImageIcon, 
   ArrowLeft, MousePointer2, Minus, Plus, 
   PenTool, Highlighter, Eraser, FileSignature, 
-  Layers, LayoutTemplate, SquarePen, Menu
+  Layers, LayoutTemplate, Menu, Edit3
 } from 'lucide-react';
 
 export default function Home() {
@@ -228,7 +228,7 @@ export default function Home() {
             <ArrowLeft size={20} />
           </button>
           <div className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 rounded-md border border-transparent hover:border-slate-200 cursor-pointer transition-colors max-w-full">
-            <SquarePen size={16} className="text-slate-400" />
+            <Edit3 size={16} className="text-slate-400" />
             <span className="font-semibold text-slate-700 truncate text-sm">{fileName}</span>
           </div>
         </div>
