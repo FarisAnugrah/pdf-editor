@@ -528,7 +528,7 @@ export default function Home() {
           </div>
 
           <div 
-            className={`w-full max-w-3xl rounded-[2rem] border-2 transition-all duration-300 p-2 relative group z-10 ${
+            className={`w-full max-w-3xl rounded-[2rem] border-2 transition-all duration-300 p-2 relative group z-10 overflow-hidden ${
               isDragging 
                 ? 'border-blue-500 bg-blue-50 scale-[1.02] shadow-2xl shadow-blue-500/20' 
                 : 'border-dashed border-slate-300 bg-white hover:border-blue-300 hover:shadow-xl hover:shadow-slate-200/50'
@@ -537,11 +537,18 @@ export default function Home() {
             onDragLeave={() => setIsDragging(false)}
             onDrop={(e) => { e.preventDefault(); setIsDragging(false); handleFileUpload(e); }}
           >
-            <div className="flex flex-col items-center justify-center py-24 px-4 rounded-[1.5rem] bg-slate-50/30 group-hover:bg-slate-50/80 transition-colors">
-              <div className="w-24 h-24 bg-white shadow-md rounded-2xl flex items-center justify-center mb-8 border border-slate-100 group-hover:-translate-y-2 transition-transform duration-300">
-                <Upload size={40} className="text-blue-500" strokeWidth={1.5} />
+            {/* Drag active overlay effect */}
+            {isDragging && (
+              <div className="absolute inset-0 bg-blue-500/5 pointer-events-none z-0 flex items-center justify-center">
+                 <div className="w-full h-full border-4 border-blue-400 rounded-[1.8rem] opacity-50 animate-pulse"></div>
               </div>
-              <h3 className="text-3xl font-bold text-slate-800 mb-3">Upload your PDF</h3>
+            )}
+            
+            <div className="flex flex-col items-center justify-center py-24 px-4 rounded-[1.5rem] bg-slate-50/30 group-hover:bg-slate-50/80 transition-colors relative z-10">
+              <div className={`w-24 h-24 bg-white shadow-md rounded-2xl flex items-center justify-center mb-8 border border-slate-100 transition-transform duration-300 ${isDragging ? '-translate-y-4 scale-110' : 'group-hover:-translate-y-2'}`}>
+                <Upload size={40} className={`transition-colors duration-300 ${isDragging ? 'text-blue-600 animate-bounce' : 'text-blue-500'}`} strokeWidth={1.5} />
+              </div>
+              <h3 className="text-3xl font-bold text-slate-800 mb-3">{isDragging ? 'Drop it here!' : 'Upload your PDF'}</h3>
               <p className="text-slate-500 mb-10 text-lg text-center max-w-md">Drag & drop your file here, or click the button below to browse your computer.</p>
               
               <label className="relative overflow-hidden bg-slate-900 hover:bg-slate-800 cursor-pointer text-white px-10 py-4 rounded-full font-bold text-lg transition-all shadow-lg hover:shadow-slate-900/25 flex items-center gap-3 transform hover:-translate-y-1">
