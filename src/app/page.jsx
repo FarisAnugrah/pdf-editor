@@ -29,6 +29,14 @@ export default function Home() {
   const [history, setHistory] = useState([]);
   const [historyStep, setHistoryStep] = useState(-1);
 
+  // Image & Sign upload
+  const imageInputRef = useRef(null);
+  const pendingImagePos = useRef(null);
+
+  // Drawing state
+  const isDrawing = useRef(false);
+  const lastDrawPos = useRef({ x: 0, y: 0 });
+
   // Helper to save state snapshot
   const saveHistorySnapshot = () => {
     // Only capture current visible edits/drawings
