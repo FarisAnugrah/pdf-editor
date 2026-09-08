@@ -203,15 +203,41 @@ export default function Home() {
   // Ref to track active rendering tasks to prevent cancellation errors
   const renderTasksRef = useRef([]);
 
+  // Use a ref to track if a render is currently in progress
+  const isRenderingRef = useRef(false);
+  const pendingRenderRef = useRef(false);
+
   useEffect(() => {
     if (pdfDoc) {
-      // Cancel any ongoing render tasks before starting new ones (e.g. from rapid zooming)
-      renderTasksRef.current.forEach(task => {
-        if (task && task.cancel) task.cancel();
-      });
-      renderTasksRef.current = Array(pdfDoc.numPages).fill(null);
+      // If already rendering, mark that we need another render right after
+      if (isRenderingRef.current) {
+        pendingRenderRef.current = true;
+        return;
+      }
       
-      renderAllPages();
+      const doRender = async () => {
+        isRenderingRef.current = true;
+        
+        // Cancel ongoing tasks just in case
+        renderTasksRef.current.forEach(task => {
+          if (task && task.cancel) {
+            try { task.cancel(); } catch(e){}
+          }
+        });
+        renderTasksRef.current = Array(pdfDoc.numPages).fill(null);
+        
+        await renderAllPages();
+        
+        isRenderingRef.current = false;
+        
+        // If zoom changed while we were rendering, trigger render again
+        if (pendingRenderRef.current) {
+          pendingRenderRef.current = false;
+          doRender();
+        }
+      };
+      
+      doRender();
     }
   }, [pdfDoc, zoom]);
 
@@ -294,11 +320,12 @@ export default function Home() {
     try {
       await renderTask.promise;
     } catch (err) {
-      if (err.name === 'RenderingCancelledException') {
+      if (err.name === 'RenderingCancelledException' || err.message?.includes('cancelled')) {
         // Expected when zooming rapidly, ignore
         return;
       }
-      throw err;
+      // Don't throw to prevent React from crashing, just log it
+      console.warn(`Render error on page ${pageNumber}:`, err);
     }
     
     // Draw Layer Setup
