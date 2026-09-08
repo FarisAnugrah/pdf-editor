@@ -11,17 +11,26 @@ export default function Home() {
   const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState('');
   const [pdfBytes, setPdfBytes] = useState(null);
-  const [zoom, setZoom] = useState(1.2);
   const [pdfDoc, setPdfDoc] = useState(null);
   const [numPages, setNumPages] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [zoom, setZoom] = useState(1.2);
   const [activeTool, setActiveTool] = useState('edit');
   const [isDragging, setIsDragging] = useState(false);
   
   const containerRef = useRef(null);
   const pagesRef = useRef([]); 
   const textLayersRef = useRef([]); 
-  const thumbnailsRef = useRef([]); // Store refs for thumbnail canvases
+  const drawLayersRef = useRef([]); 
+  const thumbnailsRef = useRef([]); 
+  const viewportsRef = useRef([]);
+
+  // Image & Sign upload
+  const imageInputRef = useRef(null);
+  const pendingImagePos = useRef(null);
+
+  // Drawing state
+  const isDrawing = useRef(false);
+  const lastDrawPos = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.pdfjsLib) {
@@ -39,41 +48,29 @@ export default function Home() {
     const bytes = await f.arrayBuffer();
     setPdfBytes(bytes);
     
-    // Load PDF Document once
     const loadingTask = window.pdfjsLib.getDocument({data: bytes});
     const doc = await loadingTask.promise;
     setPdfDoc(doc);
     setNumPages(doc.numPages);
     
-    // Reset arrays based on page count
     pagesRef.current = Array(doc.numPages).fill(null);
     textLayersRef.current = Array(doc.numPages).fill(null);
+    drawLayersRef.current = Array(doc.numPages).fill(null);
     thumbnailsRef.current = Array(doc.numPages).fill(null);
+    viewportsRef.current = Array(doc.numPages).fill(null);
   };
 
   useEffect(() => {
     if (pdfDoc) {
       renderAllPages();
     }
-  }, [pdfDoc, zoom, activeTool]);
+  }, [pdfDoc, zoom]);
 
-  const renderAllPages = async () => {
-    if (!pdfDoc) return;
-    
-    for (let i = 1; i <= pdfDoc.numPages; i++) {
-      await renderPage(i);
-    }
-  };
-
-  // Helpr function to determine standard font family based on PDF font name
   const matchFontFamily = (pdfFontName) => {
     const fontName = pdfFontName.toLowerCase();
-    
-    // Detect Bold and Italic from font name strings
     const isBold = fontName.includes('bold') || fontName.includes('black') || fontName.includes('heavy');
     const isItalic = fontName.includes('italic') || fontName.includes('oblique');
 
-    // Base detection
     let pdfType = 'Helvetica';
     let css = 'Arial, Helvetica, sans-serif';
 
@@ -85,48 +82,52 @@ export default function Home() {
       css = '"Courier New", Courier, monospace';
     }
 
-    // Apply modifiers for pdflib export
     if (isBold && isItalic) pdfType += 'BoldItalic';
     else if (isBold) pdfType += 'Bold';
-    else if (isItalic) pdfType += 'Oblique'; // HelveticaOblique, TimesRomanItalic, CourierOblique
+    else if (isItalic) pdfType += 'Oblique';
 
-    // Fix specific PDFFont names (Times uses Italic, others use Oblique in StandardFonts)
     if (pdfType === 'TimesRomanOblique') pdfType = 'TimesRomanItalic';
     
     return { css, pdfType, isBold, isItalic };
   };
 
+  const renderAllPages = async () => {
+    if (!pdfDoc) return;
+    for (let i = 1; i <= pdfDoc.numPages; i++) {
+      await renderPage(i);
+    }
+  };
+
   const renderPage = async (pageNumber) => {
     const page = await pdfDoc.getPage(pageNumber);
+    const viewport = page.getViewport({scale: zoom});
+    viewportsRef.current[pageNumber - 1] = viewport;
     
-    // --- Render Thumbnail ---
+    // Thumbnail
     const thumbCanvas = thumbnailsRef.current[pageNumber - 1];
     if (thumbCanvas) {
-      // Scale kecil untuk thumbnail (misal lebar ~150px)
-      const unscaledViewport = page.getViewport({scale: 1.0});
-      const thumbScale = 150 / unscaledViewport.width; 
+      const thumbScale = 150 / page.getViewport({scale: 1.0}).width; 
       const thumbViewport = page.getViewport({scale: thumbScale});
-      
       thumbCanvas.width = thumbViewport.width;
       thumbCanvas.height = thumbViewport.height;
-      const thumbCtx = thumbCanvas.getContext('2d');
-      
-      // Render to thumbnail canvas (tanpa await agar tidak memblokir render utama kelamaan)
-      page.render({canvasContext: thumbCtx, viewport: thumbViewport});
+      page.render({canvasContext: thumbCanvas.getContext('2d'), viewport: thumbViewport});
     }
 
-    // --- Render Main Page ---
-    const viewport = page.getViewport({scale: zoom});
-    
+    // Main Canvas
     const canvas = pagesRef.current[pageNumber - 1];
     if (!canvas) return;
-
     canvas.width = viewport.width;
     canvas.height = viewport.height;
+    await page.render({canvasContext: canvas.getContext('2d'), viewport: viewport}).promise;
     
-    const ctx = canvas.getContext('2d');
-    await page.render({canvasContext: ctx, viewport: viewport}).promise;
-    
+    // Draw Layer Setup
+    const drawCanvas = drawLayersRef.current[pageNumber - 1];
+    if (drawCanvas) {
+      drawCanvas.width = viewport.width;
+      drawCanvas.height = viewport.height;
+    }
+
+    // Text Layer Setup
     const textLayer = textLayersRef.current[pageNumber - 1];
     if (!textLayer) return;
     
@@ -147,7 +148,7 @@ export default function Home() {
       div.dataset.sz = item.transform[0];
       
       const fontMatch = matchFontFamily(item.fontName || '');
-      div.dataset.fontName = fontMatch.pdfType; // Simpan tipe font standar untuk saat export
+      div.dataset.fontName = fontMatch.pdfType; 
       div.dataset.pageIndex = pageNumber - 1;
       
       const [x, y] = viewport.convertToViewportPoint(item.transform[4], item.transform[5]);
@@ -157,12 +158,12 @@ export default function Home() {
       div.style.top = (y - fontSize) + 'px'; 
       div.style.fontSize = fontSize + 'px';
       
-      // Fallback UI ke font standard yang semirip mungkin
       div.style.fontFamily = fontMatch.css;
       if (fontMatch.isBold) div.style.fontWeight = 'bold';
       if (fontMatch.isItalic) div.style.fontStyle = 'italic';
       
-      div.onclick = () => {
+      div.onclick = (ev) => {
+        ev.stopPropagation();
         if(activeTool !== 'edit') return;
         div.contentEditable = true;
         div.classList.add('editing');
@@ -183,23 +184,167 @@ export default function Home() {
     });
   };
 
+  // --- DRAWING LOGIC ---
+  const startDrawing = (e, idx) => {
+    if (!['draw', 'highlight', 'eraser'].includes(activeTool)) return;
+    isDrawing.current = true;
+    const rect = drawLayersRef.current[idx].getBoundingClientRect();
+    lastDrawPos.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  };
+
+  const draw = (e, idx) => {
+    if (!isDrawing.current || !['draw', 'highlight', 'eraser'].includes(activeTool)) return;
+    const canvas = drawLayersRef.current[idx];
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    ctx.beginPath();
+    if (activeTool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.lineWidth = 30;
+    } else if (activeTool === 'highlight') {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = 'rgba(255, 225, 0, 0.3)';
+      ctx.lineWidth = 20;
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 3;
+    }
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.moveTo(lastDrawPos.current.x, lastDrawPos.current.y);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    
+    lastDrawPos.current = { x, y };
+  };
+
+  const stopDrawing = () => { isDrawing.current = false; };
+
+  // --- IMAGE / SIGN LOGIC ---
+  const handleImageUpload = (e) => {
+    const f = e.target.files[0];
+    if (!f || !pendingImagePos.current) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        const dataUrl = ev.target.result;
+        const { pageIndex, x, y } = pendingImagePos.current;
+        const viewport = viewportsRef.current[pageIndex];
+        const [pdfX, pdfY] = viewport.convertToPdfPoint(x, y);
+        
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.className = 'pdf-image edited-image';
+        img.dataset.pdfX = pdfX;
+        img.dataset.pdfY = pdfY;
+        
+        img.style.position = 'absolute';
+        img.style.left = x + 'px';
+        img.style.top = y + 'px';
+        img.style.maxWidth = '150px'; 
+        img.style.cursor = 'move';
+        
+        img.ondragstart = () => false;
+        img.onmousedown = (evDrag) => {
+            if (activeTool !== 'edit') return;
+            let startX = evDrag.clientX - img.offsetLeft;
+            let startY = evDrag.clientY - img.offsetTop;
+            
+            const onMove = (evMove) => {
+                img.style.left = (evMove.clientX - startX) + 'px';
+                img.style.top = (evMove.clientY - startY) + 'px';
+                const [newPdfX, newPdfY] = viewport.convertToPdfPoint(evMove.clientX - startX, evMove.clientY - startY);
+                img.dataset.pdfX = newPdfX;
+                img.dataset.pdfY = newPdfY;
+            };
+            const onUp = () => {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+
+        textLayersRef.current[pageIndex].appendChild(img);
+    };
+    reader.readAsDataURL(f);
+    e.target.value = ''; 
+  };
+
+  // --- TEXT CLICK LOGIC ---
+  const handlePageClick = (e, pageIndex) => {
+    if (activeTool === 'add-text') {
+        const rect = textLayersRef.current[pageIndex].getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        const viewport = viewportsRef.current[pageIndex];
+        const [pdfX, pdfY] = viewport.convertToPdfPoint(x, y);
+
+        const div = document.createElement('div');
+        div.className = 'pdf-text edited new-text';
+        div.innerText = 'New Text';
+        div.contentEditable = true;
+        
+        div.dataset.orig = '';
+        div.dataset.x = pdfX;
+        div.dataset.y = pdfY;
+        div.dataset.w = 50; 
+        div.dataset.sz = 14; 
+        div.dataset.fontName = 'Helvetica'; 
+        div.dataset.pageIndex = pageIndex;
+        div.dataset.isNew = 'true';
+
+        div.style.left = x + 'px';
+        div.style.top = (y - 14 * zoom) + 'px'; 
+        div.style.fontSize = (14 * zoom) + 'px';
+        div.style.fontFamily = 'Arial, Helvetica, sans-serif';
+        div.style.whiteSpace = 'nowrap';
+        div.style.minWidth = '20px';
+
+        div.onblur = () => { div.contentEditable = false; div.classList.remove('editing'); };
+        div.onclick = (ev) => { 
+          ev.stopPropagation(); 
+          if (['edit', 'add-text'].includes(activeTool)) { 
+            div.contentEditable = true; 
+            div.classList.add('editing'); 
+            div.focus(); 
+          } 
+        };
+
+        textLayersRef.current[pageIndex].appendChild(div);
+        setTimeout(() => { div.focus(); }, 50);
+
+    } else if (activeTool === 'image' || activeTool === 'signature') {
+        const rect = textLayersRef.current[pageIndex].getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        pendingImagePos.current = { pageIndex, x, y };
+        if (imageInputRef.current) imageInputRef.current.click();
+    }
+  };
+
+  // --- EXPORT LOGIC ---
   const handleSave = async () => {
     if(!pdfBytes) return;
     const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
     const doc = await PDFDocument.load(pdfBytes);
     
-    // Daftarkan ke 3 Font standard beserta variasi tebal miringnya
     const fontCache = {
       Helvetica: await doc.embedFont(StandardFonts.Helvetica),
       HelveticaBold: await doc.embedFont(StandardFonts.HelveticaBold),
       HelveticaOblique: await doc.embedFont(StandardFonts.HelveticaOblique),
       HelveticaBoldOblique: await doc.embedFont(StandardFonts.HelveticaBoldOblique),
-      
       TimesRoman: await doc.embedFont(StandardFonts.TimesRoman),
       TimesRomanBold: await doc.embedFont(StandardFonts.TimesRomanBold),
       TimesRomanItalic: await doc.embedFont(StandardFonts.TimesRomanItalic),
       TimesRomanBoldItalic: await doc.embedFont(StandardFonts.TimesRomanBoldItalic),
-      
       Courier: await doc.embedFont(StandardFonts.Courier),
       CourierBold: await doc.embedFont(StandardFonts.CourierBold),
       CourierOblique: await doc.embedFont(StandardFonts.CourierOblique),
@@ -208,13 +353,14 @@ export default function Home() {
 
     const pages = doc.getPages();
 
-    // Iterate tiap page yang ada di container
-    textLayersRef.current.forEach((layer, index) => {
-        if(!layer) return;
-        const nodes = layer.querySelectorAll('.pdf-text.edited');
+    for (let index = 0; index < pages.length; index++) {
         const page = pages[index];
-
-        nodes.forEach(node => {
+        const layer = textLayersRef.current[index];
+        if(!layer) continue;
+        
+        // 1. Export Texts
+        const textNodes = layer.querySelectorAll('.pdf-text.edited');
+        textNodes.forEach(node => {
             const newText = node.innerText;
             const pdfX = parseFloat(node.dataset.x);
             const pdfY = parseFloat(node.dataset.y);
@@ -222,25 +368,59 @@ export default function Home() {
             const pdfSz = parseFloat(node.dataset.sz);
             const pdfType = node.dataset.fontName || 'Helvetica';
             
-            // Whiteout (Hapus teks asli)
-            page.drawRectangle({
-                x: pdfX, 
-                y: pdfY - (pdfSz * 0.2),
-                width: Math.max(pdfW, newText.length * (pdfSz * 0.5)), // estimasi lebar
-                height: pdfSz * 1.2,
-                color: rgb(1, 1, 1) // Putih
-            });
-
-            // Tulis Teks Baru pakai Standard Font PDFLib
+            if (node.dataset.isNew !== 'true') {
+                page.drawRectangle({
+                    x: pdfX, 
+                    y: pdfY - (pdfSz * 0.2),
+                    width: Math.max(pdfW, newText.length * (pdfSz * 0.5)), 
+                    height: pdfSz * 1.2,
+                    color: rgb(1, 1, 1) 
+                });
+            }
             page.drawText(newText, {
                 x: pdfX,
                 y: pdfY,
                 size: pdfSz,
                 font: fontCache[pdfType],
-                color: rgb(0, 0, 0) // Hitam
+                color: rgb(0, 0, 0)
             });
         });
-    });
+
+        // 2. Export Images
+        const imageNodes = layer.querySelectorAll('.pdf-image.edited-image');
+        for (const img of imageNodes) {
+            const isPng = img.src.includes('image/png');
+            const embeddedImg = isPng ? await doc.embedPng(img.src) : await doc.embedJpg(img.src);
+            const pdfX = parseFloat(img.dataset.pdfX);
+            const pdfY = parseFloat(img.dataset.pdfY);
+            
+            // Adjust visual width to PDF points
+            const imgPdfW = img.offsetWidth / zoom;
+            const imgPdfH = img.offsetHeight / zoom;
+            
+            page.drawImage(embeddedImg, {
+                x: pdfX,
+                y: pdfY - imgPdfH, // PDF draws bottom-up
+                width: imgPdfW,
+                height: imgPdfH
+            });
+        }
+
+        // 3. Export Drawings
+        const drawCanvas = drawLayersRef.current[index];
+        if (drawCanvas) {
+            const dataUrl = drawCanvas.toDataURL('image/png');
+            if (dataUrl.length > 500) { // Check if not empty
+                const pngImage = await doc.embedPng(dataUrl);
+                page.drawImage(pngImage, {
+                    x: 0,
+                    y: 0,
+                    width: page.getWidth(),
+                    height: page.getHeight()
+                });
+            }
+        }
+    }
 
     const savedBytes = await doc.save();
     const blob = new Blob([savedBytes], { type: 'application/pdf' });
@@ -252,20 +432,21 @@ export default function Home() {
   };
 
   const ToolButton = ({ id, icon: Icon, label }) => {
-    // Tool yang aktif (PoC)
-    const isWorking = ['edit'].includes(id); 
+    // ACTIVE TOOLS CONTROLLED BY THIS ARRAY
+    const isWorking = ['edit', 'add-text', 'image', 'signature', 'draw', 'highlight', 'eraser']; 
+    const enabled = isWorking.includes(id);
     
     return (
       <button
-        onClick={() => isWorking && setActiveTool(id)}
+        onClick={() => enabled && setActiveTool(id)}
         className={`flex flex-col items-center justify-center w-14 h-12 rounded-lg transition-all relative ${
           activeTool === id 
             ? 'bg-blue-50 text-blue-600 shadow-sm' 
-            : isWorking 
+            : enabled 
               ? 'text-slate-600 hover:bg-slate-100'
               : 'text-slate-300 cursor-not-allowed'
         }`}
-        title={isWorking ? label : `${label} (Coming Soon)`}
+        title={enabled ? label : `${label} (Coming Soon)`}
       >
         <Icon size={20} strokeWidth={activeTool === id ? 2.5 : 2} />
         <span className="text-[10px] mt-1 font-medium">{label}</span>
@@ -273,12 +454,11 @@ export default function Home() {
     );
   };
 
-  // Landing Page UI
+  // --- RENDER LANDING PAGE ---
   if (!file) {
     return (
       <div className="min-h-screen bg-[#FDFDFD] flex flex-col font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900">
         
-        {/* Navigation */}
         <header className="h-20 px-6 lg:px-16 flex items-center justify-between bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-50">
           <div className="flex items-center gap-3 cursor-pointer group">
             <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-red-500/20 group-hover:scale-105 transition-transform duration-300">
@@ -302,12 +482,10 @@ export default function Home() {
 
         <main className="flex-1 flex flex-col items-center pt-20 px-4 pb-24 relative overflow-hidden">
           
-          {/* Decorative Background Elements */}
           <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-b from-blue-50 to-transparent rounded-full blur-3xl -z-10 opacity-70 pointer-events-none"></div>
           <div className="absolute -left-32 top-32 w-72 h-72 bg-rose-50 rounded-full blur-3xl -z-10 opacity-60 pointer-events-none"></div>
           <div className="absolute -right-32 top-64 w-96 h-96 bg-blue-50 rounded-full blur-3xl -z-10 opacity-60 pointer-events-none"></div>
 
-          {/* Hero Content */}
           <div className="text-center max-w-4xl mx-auto mb-14 px-4">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 text-blue-600 font-semibold text-sm mb-6 border border-blue-100">
               <span className="flex h-2 w-2 relative">
@@ -325,7 +503,6 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Upload Dropzone */}
           <div 
             className={`w-full max-w-3xl rounded-[2rem] border-2 transition-all duration-300 p-2 relative group z-10 ${
               isDragging 
@@ -356,7 +533,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Features Section */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mt-32 px-4">
             <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
               <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center mb-6">
@@ -386,10 +562,22 @@ export default function Home() {
     );
   }
 
-  // Editor UI
+  // --- RENDER EDITOR UI ---
+  const isDrawingTool = ['draw', 'highlight', 'eraser'].includes(activeTool);
+  const isTextOrImageTool = ['edit', 'add-text', 'image', 'signature'].includes(activeTool);
+  
+  // Custom cursor classes
+  let cursorClass = 'cursor-default';
+  if (isDrawingTool) cursorClass = 'cursor-crosshair';
+  else if (activeTool === 'add-text') cursorClass = 'cursor-text';
+  else if (activeTool === 'image' || activeTool === 'signature') cursorClass = 'cursor-crosshair';
+
   return (
     <div className="h-screen bg-[#E5E7EB] flex flex-col font-sans overflow-hidden">
-      {/* Top Navbar */}
+      
+      {/* Hidden File Input for Image/Sign */}
+      <input type="file" ref={imageInputRef} className="hidden" accept="image/png, image/jpeg" onChange={handleImageUpload} />
+
       <header className="bg-white h-16 border-b border-slate-200 flex items-center justify-between px-4 lg:px-6 shrink-0 z-30 shadow-sm relative">
         <div className="flex items-center gap-4 w-1/4">
           <button onClick={() => setFile(null)} className="p-2 hover:bg-slate-100 rounded-full text-slate-600 transition-colors">
@@ -401,7 +589,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Centered Floating Toolbar */}
         <div className="hidden md:flex items-center gap-1 bg-white border border-slate-200 shadow-sm rounded-xl p-1.5 z-40 absolute left-1/2 -translate-x-1/2">
           <ToolButton id="edit" icon={MousePointer2} label="Edit Text" />
           <div className="w-px h-8 bg-slate-200 mx-1"></div>
@@ -423,7 +610,6 @@ export default function Home() {
       </header>
 
       <div className="flex flex-1 overflow-hidden relative">
-        {/* Left Sidebar - Pages */}
         <aside className="w-72 bg-slate-50 border-r border-slate-200 flex flex-col z-20 shrink-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)] hidden lg:flex">
           <div className="p-4 border-b border-slate-200 bg-white flex items-center gap-2 text-slate-700">
             <LayoutTemplate size={18} />
@@ -431,7 +617,6 @@ export default function Home() {
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
-            {/* Dynamic Thumbnails */}
             {Array.from({ length: numPages }).map((_, idx) => (
               <div 
                 key={idx}
@@ -462,10 +647,8 @@ export default function Home() {
           </div>
         </aside>
 
-        {/* Main Canvas Area */}
         <main className="flex-1 overflow-auto flex justify-center p-8 lg:p-12 pb-32 bg-[#E5E7EB] relative scroll-smooth">
           
-          {/* Zoom Controls (Bottom Center Floating) */}
           <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md rounded-full shadow-lg border border-slate-200 px-2 py-1.5 flex items-center gap-2 z-40">
             <button 
               onClick={() => setZoom(z => Math.max(0.5, z - 0.25))}
@@ -484,23 +667,34 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Actual PDF Container - All Pages */}
-          <div className="flex flex-col gap-8 pb-10">
+          <div className={`flex flex-col gap-8 pb-10 ${cursorClass}`}>
             {Array.from({ length: numPages }).map((_, idx) => (
               <div 
                 key={idx}
                 id={`page-wrapper-${idx}`}
-                className={`relative bg-white shadow-2xl transition-transform origin-top ${
-                  activeTool === 'edit' ? '' : 'cursor-crosshair'
-                }`}
+                className="relative bg-white shadow-2xl transition-transform origin-top"
               >
+                {/* 1. PDF Base */}
                 <canvas 
                   ref={el => pagesRef.current[idx] = el} 
                   className="block" 
                 />
+                
+                {/* 2. Drawing Layer */}
+                <canvas 
+                  ref={el => drawLayersRef.current[idx] = el} 
+                  className={`absolute top-0 left-0 w-full h-full ${isDrawingTool ? 'pointer-events-auto' : 'pointer-events-none'}`}
+                  onMouseDown={e => startDrawing(e, idx)}
+                  onMouseMove={e => draw(e, idx)}
+                  onMouseUp={stopDrawing}
+                  onMouseLeave={stopDrawing}
+                />
+
+                {/* 3. Text & Image Layer */}
                 <div 
                   ref={el => textLayersRef.current[idx] = el} 
-                  className={`absolute top-0 left-0 w-full h-full overflow-hidden ${activeTool !== 'edit' ? 'pointer-events-none' : ''}`} 
+                  className={`absolute top-0 left-0 w-full h-full overflow-hidden ${isTextOrImageTool ? 'pointer-events-auto' : 'pointer-events-none'}`} 
+                  onClick={(e) => handlePageClick(e, idx)}
                 />
               </div>
             ))}
