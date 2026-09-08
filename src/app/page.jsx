@@ -446,7 +446,7 @@ export default function Home() {
 
   // --- DRAWING LOGIC ---
   const startDrawing = (e, idx) => {
-    if (!['draw', 'highlight', 'eraser'].includes(activeTool)) return;
+    if (!['draw', 'line', 'highlight', 'eraser'].includes(activeTool)) return;
     isDrawing.current = true;
     const canvas = drawLayersRef.current[idx];
     const rect = canvas.getBoundingClientRect();
