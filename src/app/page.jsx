@@ -1,18 +1,23 @@
-import React, { useState, useRef } from 'react';
+"use client"
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, Download, Type, Image as ImageIcon, CheckSquare, Settings, ArrowLeft, MousePointer2, Minus, Plus, Search } from 'lucide-react';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-
-export default function App() {
+export default function Home() {
   const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState('');
   const [pdfBytes, setPdfBytes] = useState(null);
   const [zoom, setZoom] = useState(1.5);
-  const [activeTool, setActiveTool] = useState('edit'); // edit, text, add-image, draw
+  const [activeTool, setActiveTool] = useState('edit');
   
   const canvasRef = useRef(null);
   const textLayerRef = useRef(null);
   const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    }
+  }, []);
 
   const handleFileUpload = async (e) => {
     const f = e.target.files[0];
@@ -26,9 +31,9 @@ export default function App() {
   };
 
   const renderPdf = async (bytes, currentZoom) => {
-    const loadingTask = pdfjsLib.getDocument({data: bytes});
+    const loadingTask = window.pdfjsLib.getDocument({data: bytes});
     const doc = await loadingTask.promise;
-    const page = await doc.getPage(1); // Still page 1 for PoC
+    const page = await doc.getPage(1);
     
     const viewport = page.getViewport({scale: currentZoom});
     const canvas = canvasRef.current;
@@ -38,7 +43,6 @@ export default function App() {
     const ctx = canvas.getContext('2d');
     await page.render({canvasContext: ctx, viewport: viewport}).promise;
     
-    // Interactive Text Layer
     const textLayer = textLayerRef.current;
     textLayer.innerHTML = '';
     const textContent = await page.getTextContent();
@@ -88,7 +92,7 @@ export default function App() {
 
   const handleSave = async () => {
     if(!pdfBytes) return;
-    const { PDFDocument, rgb } = PDFLib;
+    const { PDFDocument, rgb } = window.PDFLib;
     const doc = await PDFDocument.load(pdfBytes);
     const pages = doc.getPages();
     const firstPage = pages[0];
@@ -151,7 +155,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F0F2F5] flex flex-col">
-      {/* Top Header */}
       <header className="bg-white border-b border-gray-200 h-14 px-4 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4">
           <button onClick={() => setFile(null)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600">
@@ -177,7 +180,6 @@ export default function App() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Left Toolbar */}
         <aside className="w-16 bg-white border-r border-gray-200 flex flex-col items-center py-4 gap-4 shrink-0">
           <button 
             onClick={() => setActiveTool('edit')}
@@ -202,7 +204,6 @@ export default function App() {
           </div>
         </aside>
 
-        {/* Main Canvas Area */}
         <main className="flex-1 overflow-auto flex justify-center p-8 bg-[#F0F2F5]">
           <div ref={containerRef} className="relative bg-white shadow-sm ring-1 ring-gray-900/5">
             <canvas ref={canvasRef} className="block" />
