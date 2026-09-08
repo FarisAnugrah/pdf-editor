@@ -287,99 +287,134 @@ export default function Home() {
   const renderPage = async (pageNumber) => {
     // Safety check to ensure canvas elements exist before rendering
     if (!pagesRef.current[pageNumber - 1]) {
-      // Small delay and retry if DOM isn't ready
       await new Promise(r => setTimeout(r, 100));
       if (!pagesRef.current[pageNumber - 1]) return;
     }
 
-    const page = await pdfDoc.getPage(pageNumber);
-    const viewport = page.getViewport({scale: zoom});
-    viewportsRef.current[pageNumber - 1] = viewport;
-    
-    // Thumbnail
-    const thumbCanvas = thumbnailsRef.current[pageNumber - 1];
-    if (thumbCanvas) {
-      const thumbScale = 150 / page.getViewport({scale: 1.0}).width; 
-      const thumbViewport = page.getViewport({scale: thumbScale});
-      thumbCanvas.width = thumbViewport.width;
-      thumbCanvas.height = thumbViewport.height;
-      page.render({canvasContext: thumbCanvas.getContext('2d'), viewport: thumbViewport});
-    }
-
-    // Main Canvas
-    const canvas = pagesRef.current[pageNumber - 1];
-    if (!canvas) return;
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    
-    // Store render task to allow cancellation
-    const renderContext = { canvasContext: canvas.getContext('2d'), viewport: viewport };
-    const renderTask = page.render(renderContext);
-    renderTasksRef.current[pageNumber - 1] = renderTask;
-    
     try {
+      const page = await pdfDoc.getPage(pageNumber);
+      
+      // Thumbnail rendering with concurrency protection
+      const thumbCanvas = thumbnailsRef.current[pageNumber - 1];
+      if (thumbCanvas) {
+        const unscaledViewport = page.getViewport({scale: 1.0});
+        const thumbScale = 150 / unscaledViewport.width; 
+        const thumbViewport = page.getViewport({scale: thumbScale});
+        
+        thumbCanvas.width = thumbViewport.width;
+        thumbCanvas.height = thumbViewport.height;
+        
+        // Prevent concurrent thumb render collision
+        if (!thumbCanvas.dataset.rendering) {
+          thumbCanvas.dataset.rendering = "true";
+          try {
+            await page.render({canvasContext: thumbCanvas.getContext('2d'), viewport: thumbViewport}).promise;
+          } catch(e) { /* ignore thumb errors */ }
+          finally { thumbCanvas.dataset.rendering = ""; }
+        }
+      }
+
+      // Main Canvas rendering
+      const viewport = page.getViewport({scale: zoom});
+      viewportsRef.current[pageNumber - 1] = viewport;
+      
+      const canvas = pagesRef.current[pageNumber - 1];
+      if (!canvas) return;
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      
+      // Cancel previous render task completely
+      if (renderTasksRef.current[pageNumber - 1]) {
+        try { renderTasksRef.current[pageNumber - 1].cancel(); } catch(e){}
+      }
+
+      const renderContext = { canvasContext: canvas.getContext('2d'), viewport: viewport };
+      const renderTask = page.render(renderContext);
+      renderTasksRef.current[pageNumber - 1] = renderTask;
+      
       await renderTask.promise;
+      
+      // Draw Layer Setup
+      const drawCanvas = drawLayersRef.current[pageNumber - 1];
+      if (drawCanvas) {
+        // Only resize if different to prevent clearing existing drawings
+        if (drawCanvas.width !== viewport.width) drawCanvas.width = viewport.width;
+        if (drawCanvas.height !== viewport.height) drawCanvas.height = viewport.height;
+      }
+
+      // Text Layer Setup
+      const textLayer = textLayersRef.current[pageNumber - 1];
+      if (!textLayer) return;
+      
+      textLayer.innerHTML = '';
+      const textContent = await page.getTextContent();
+      
+      textContent.items.forEach(item => {
+        if (!item.str.trim()) return;
+
+        const div = document.createElement('div');
+        div.className = 'pdf-text';
+        div.innerText = item.str;
+        
+        div.dataset.orig = item.str;
+        div.dataset.x = item.transform[4];
+        div.dataset.y = item.transform[5];
+        div.dataset.w = item.width;
+        div.dataset.sz = item.transform[0];
+        
+        const fontMatch = matchFontFamily(item.fontName || '');
+        div.dataset.fontName = fontMatch.pdfType; 
+        div.dataset.pageIndex = pageNumber - 1;
+        
+        const [x, y] = viewport.convertToViewportPoint(item.transform[4], item.transform[5]);
+        const fontSize = item.transform[0] * zoom;
+        
+        div.style.left = x + 'px';
+        div.style.top = (y - fontSize) + 'px'; 
+        div.style.fontSize = fontSize + 'px';
+        
+        div.style.fontFamily = fontMatch.css;
+        if (fontMatch.isBold) div.style.fontWeight = 'bold';
+        if (fontMatch.isItalic) div.style.fontStyle = 'italic';
+        
+        div.style.pointerEvents = 'auto';
+        
+        div.onclick = (ev) => {
+          ev.stopPropagation();
+          if(activeTool !== 'edit') return;
+          div.contentEditable = true;
+          div.classList.add('editing');
+          div.focus();
+        };
+        
+        div.onblur = () => {
+          div.contentEditable = false;
+          div.classList.remove('editing');
+          const oldHtml = div.innerHTML;
+          if (div.innerText !== div.dataset.orig) {
+            div.classList.add('edited');
+          } else {
+            div.classList.remove('edited');
+          }
+          if (oldHtml !== div.innerHTML || div.classList.contains('edited')) {
+             saveHistorySnapshot();
+          }
+        };
+        
+        textLayer.appendChild(div);
+      });
+
+      if (pageNumber === pdfDoc.numPages && historyStep === -1) {
+         setTimeout(saveHistorySnapshot, 500);
+      }
+
     } catch (err) {
       if (err.name === 'RenderingCancelledException' || err.message?.includes('cancelled')) {
-        // Expected when zooming rapidly, ignore
-        return;
+        return; 
       }
-      // Don't throw to prevent React from crashing, just log it
       console.warn(`Render error on page ${pageNumber}:`, err);
     }
-    
-    // Draw Layer Setup
-    const drawCanvas = drawLayersRef.current[pageNumber - 1];
-    if (drawCanvas) {
-      drawCanvas.width = viewport.width;
-      drawCanvas.height = viewport.height;
-    }
-
-    // Text Layer Setup
-    const textLayer = textLayersRef.current[pageNumber - 1];
-    if (!textLayer) return;
-    
-    textLayer.innerHTML = '';
-    const textContent = await page.getTextContent();
-    
-    textContent.items.forEach(item => {
-      if (!item.str.trim()) return;
-
-      const div = document.createElement('div');
-      div.className = 'pdf-text';
-      div.innerText = item.str;
-      
-      div.dataset.orig = item.str;
-      div.dataset.x = item.transform[4];
-      div.dataset.y = item.transform[5];
-      div.dataset.w = item.width;
-      div.dataset.sz = item.transform[0];
-      
-      const fontMatch = matchFontFamily(item.fontName || '');
-      div.dataset.fontName = fontMatch.pdfType; 
-      div.dataset.pageIndex = pageNumber - 1;
-      
-      const [x, y] = viewport.convertToViewportPoint(item.transform[4], item.transform[5]);
-      const fontSize = item.transform[0] * zoom;
-      
-      div.style.left = x + 'px';
-      div.style.top = (y - fontSize) + 'px'; 
-      div.style.fontSize = fontSize + 'px';
-      
-      div.style.fontFamily = fontMatch.css;
-      if (fontMatch.isBold) div.style.fontWeight = 'bold';
-      if (fontMatch.isItalic) div.style.fontStyle = 'italic';
-      
-      // Make text interactive only when editing
-      div.style.pointerEvents = 'auto';
-      
-      div.onclick = (ev) => {
-        ev.stopPropagation();
-        if(activeTool !== 'edit') return;
-        div.contentEditable = true;
-        div.classList.add('editing');
-        div.focus();
-      };
+  };
       
       div.onblur = () => {
         div.contentEditable = false;
