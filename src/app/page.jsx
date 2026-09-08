@@ -12,11 +12,15 @@ export default function Home() {
   const [fileName, setFileName] = useState('');
   const [pdfBytes, setPdfBytes] = useState(null);
   const [zoom, setZoom] = useState(1.2);
+  const [pdfDoc, setPdfDoc] = useState(null);
+  const [numPages, setNumPages] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
   const [activeTool, setActiveTool] = useState('edit');
   const [isDragging, setIsDragging] = useState(false);
   
-  const canvasRef = useRef(null);
-  const textLayerRef = useRef(null);
+  const containerRef = useRef(null);
+  const pagesRef = useRef([]); // Store refs for all pages
+  const textLayersRef = useRef([]); // Store text layers for all pages
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.pdfjsLib) {
@@ -33,16 +37,37 @@ export default function Home() {
     
     const bytes = await f.arrayBuffer();
     setPdfBytes(bytes);
-    renderPdf(bytes, zoom);
-  };
-
-  const renderPdf = async (bytes, currentZoom) => {
+    
+    // Load PDF Document once
     const loadingTask = window.pdfjsLib.getDocument({data: bytes});
     const doc = await loadingTask.promise;
-    const page = await doc.getPage(1);
+    setPdfDoc(doc);
+    setNumPages(doc.numPages);
     
-    const viewport = page.getViewport({scale: currentZoom});
-    const canvas = canvasRef.current;
+    // Reset arrays based on page count
+    pagesRef.current = Array(doc.numPages).fill(null);
+    textLayersRef.current = Array(doc.numPages).fill(null);
+  };
+
+  useEffect(() => {
+    if (pdfDoc) {
+      renderAllPages();
+    }
+  }, [pdfDoc, zoom, activeTool]);
+
+  const renderAllPages = async () => {
+    if (!pdfDoc) return;
+    
+    for (let i = 1; i <= pdfDoc.numPages; i++) {
+      await renderPage(i);
+    }
+  };
+
+  const renderPage = async (pageNumber) => {
+    const page = await pdfDoc.getPage(pageNumber);
+    const viewport = page.getViewport({scale: zoom});
+    
+    const canvas = pagesRef.current[pageNumber - 1];
     if (!canvas) return;
 
     canvas.width = viewport.width;
@@ -51,7 +76,7 @@ export default function Home() {
     const ctx = canvas.getContext('2d');
     await page.render({canvasContext: ctx, viewport: viewport}).promise;
     
-    const textLayer = textLayerRef.current;
+    const textLayer = textLayersRef.current[pageNumber - 1];
     if (!textLayer) return;
     
     textLayer.innerHTML = '';
@@ -69,14 +94,17 @@ export default function Home() {
       div.dataset.y = item.transform[5];
       div.dataset.w = item.width;
       div.dataset.sz = item.transform[0];
+      div.dataset.fontName = item.fontName; // Simpan nama font PDF.js
+      div.dataset.pageIndex = pageNumber - 1;
       
       const [x, y] = viewport.convertToViewportPoint(item.transform[4], item.transform[5]);
-      const fontSize = item.transform[0] * viewport.scale;
+      const fontSize = item.transform[0] * zoom;
       
       div.style.left = x + 'px';
       div.style.top = (y - fontSize) + 'px'; 
       div.style.fontSize = fontSize + 'px';
-      div.style.fontFamily = item.fontName || 'sans-serif';
+      // Kita usahakan fallback font style mirip dengan font family bawaannya
+      div.style.fontFamily = `"${item.fontName}", sans-serif`;
       
       div.onclick = () => {
         if(activeTool !== 'edit') return;
@@ -99,41 +127,47 @@ export default function Home() {
     });
   };
 
-  // Re-render when zoom changes
-  useEffect(() => {
-    if (pdfBytes) {
-      renderPdf(pdfBytes, zoom);
-    }
-  }, [zoom, activeTool]); // re-render layout wrapper
-
   const handleSave = async () => {
     if(!pdfBytes) return;
-    const { PDFDocument, rgb } = window.PDFLib;
+    const { PDFDocument, rgb, StandardFonts } = window.PDFLib;
     const doc = await PDFDocument.load(pdfBytes);
+    
+    // Daftarkan font standar sebagai fallback (PDF-lib tidak bisa gampang pakai custom font bawaan PDF asli tanpa embed file font TTF)
+    const helveticaFont = await doc.embedFont(StandardFonts.Helvetica);
+
     const pages = doc.getPages();
-    const firstPage = pages[0];
 
-    const nodes = textLayerRef.current.querySelectorAll('.pdf-text.edited');
-    nodes.forEach(node => {
-        const newText = node.innerText;
-        const pdfX = parseFloat(node.dataset.x);
-        const pdfY = parseFloat(node.dataset.y);
-        const pdfW = parseFloat(node.dataset.w);
-        const pdfSz = parseFloat(node.dataset.sz);
-        
-        firstPage.drawRectangle({
-            x: pdfX, 
-            y: pdfY - (pdfSz * 0.2),
-            width: Math.max(pdfW, newText.length * (pdfSz * 0.5)),
-            height: pdfSz * 1.2,
-            color: rgb(1, 1, 1)
-        });
+    // Iterate tiap page yang ada di container
+    textLayersRef.current.forEach((layer, index) => {
+        if(!layer) return;
+        const nodes = layer.querySelectorAll('.pdf-text.edited');
+        const page = pages[index];
 
-        firstPage.drawText(newText, {
-            x: pdfX,
-            y: pdfY,
-            size: pdfSz,
-            color: rgb(0, 0, 0)
+        nodes.forEach(node => {
+            const newText = node.innerText;
+            const pdfX = parseFloat(node.dataset.x);
+            const pdfY = parseFloat(node.dataset.y);
+            const pdfW = parseFloat(node.dataset.w);
+            const pdfSz = parseFloat(node.dataset.sz);
+            
+            // Whiteout (Hapus teks asli)
+            page.drawRectangle({
+                x: pdfX, 
+                y: pdfY - (pdfSz * 0.2),
+                width: Math.max(pdfW, newText.length * (pdfSz * 0.5)), // estimasi lebar
+                height: pdfSz * 1.2,
+                color: rgb(1, 1, 1) // Putih
+            });
+
+            // Tulis Teks Baru pakai Standard Font PDFLib
+            // *Catatan: Untuk font 100% identik, kita butuh file TTF asli. StandardFonts.Helvetica adalah standar paling aman.
+            page.drawText(newText, {
+                x: pdfX,
+                y: pdfY,
+                size: pdfSz,
+                font: helveticaFont,
+                color: rgb(0, 0, 0) // Hitam
+            });
         });
     });
 
@@ -263,17 +297,23 @@ export default function Home() {
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
-            {/* Dummy Thumbnail for PoC */}
-            <div className="flex flex-col items-center gap-2 group cursor-pointer">
-              <div className="relative w-full aspect-[1/1.4] bg-white border-2 border-blue-500 rounded-lg shadow-sm overflow-hidden flex items-center justify-center">
-                {/* Visual placeholder for thumbnail */}
-                <div className="w-3/4 h-3/4 border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-300">
-                  <Layers size={32} />
+            {/* Dynamic Thumbnails */}
+            {Array.from({ length: numPages }).map((_, idx) => (
+              <div 
+                key={idx}
+                className="flex flex-col items-center gap-2 group cursor-pointer"
+                onClick={() => {
+                  const target = document.getElementById(`page-wrapper-${idx}`);
+                  if (target) target.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                <div className="relative w-full aspect-[1/1.4] bg-white border-2 border-slate-200 hover:border-blue-500 rounded-lg shadow-sm overflow-hidden flex items-center justify-center transition-colors">
+                  <span className="text-slate-400 font-bold">{idx + 1}</span>
+                  <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 </div>
-                <div className="absolute inset-0 bg-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">Page {idx + 1}</span>
               </div>
-              <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md">Page 1</span>
-            </div>
+            ))}
           </div>
 
           <div className="p-4 border-t border-slate-200 bg-white">
@@ -306,14 +346,26 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Actual PDF Container */}
-          <div 
-            className={`relative bg-white shadow-2xl transition-transform origin-top ${
-              activeTool === 'edit' ? '' : 'cursor-crosshair'
-            }`}
-          >
-            <canvas ref={canvasRef} className="block" />
-            <div ref={textLayerRef} className={`absolute top-0 left-0 w-full h-full overflow-hidden ${activeTool !== 'edit' ? 'pointer-events-none' : ''}`} />
+          {/* Actual PDF Container - All Pages */}
+          <div className="flex flex-col gap-8 pb-10">
+            {Array.from({ length: numPages }).map((_, idx) => (
+              <div 
+                key={idx}
+                id={`page-wrapper-${idx}`}
+                className={`relative bg-white shadow-2xl transition-transform origin-top ${
+                  activeTool === 'edit' ? '' : 'cursor-crosshair'
+                }`}
+              >
+                <canvas 
+                  ref={el => pagesRef.current[idx] = el} 
+                  className="block" 
+                />
+                <div 
+                  ref={el => textLayersRef.current[idx] = el} 
+                  className={`absolute top-0 left-0 w-full h-full overflow-hidden ${activeTool !== 'edit' ? 'pointer-events-none' : ''}`} 
+                />
+              </div>
+            ))}
           </div>
         </main>
       </div>
