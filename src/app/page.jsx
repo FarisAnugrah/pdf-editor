@@ -233,12 +233,30 @@ export default function Home() {
 
   const renderAllPages = async () => {
     if (!pdfDoc) return;
-    for (let i = 1; i <= pdfDoc.numPages; i++) {
-      await renderPage(i);
+    
+    // Create an array of page numbers
+    const pagesToRender = Array.from({ length: pdfDoc.numPages }, (_, i) => i + 1);
+    
+    // Render sequentially instead of using Promise.all to avoid 
+    // "Canvas context is already in use" errors from PDF.js workers
+    // which causes missing pages
+    for (const pageNum of pagesToRender) {
+      try {
+        await renderPage(pageNum);
+      } catch (err) {
+        console.error(`Error rendering page ${pageNum}:`, err);
+      }
     }
   };
 
   const renderPage = async (pageNumber) => {
+    // Safety check to ensure canvas elements exist before rendering
+    if (!pagesRef.current[pageNumber - 1]) {
+      // Small delay and retry if DOM isn't ready
+      await new Promise(r => setTimeout(r, 100));
+      if (!pagesRef.current[pageNumber - 1]) return;
+    }
+
     const page = await pdfDoc.getPage(pageNumber);
     const viewport = page.getViewport({scale: zoom});
     viewportsRef.current[pageNumber - 1] = viewport;
