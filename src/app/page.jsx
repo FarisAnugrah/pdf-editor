@@ -195,6 +195,9 @@ export default function Home() {
       if (fontMatch.isBold) div.style.fontWeight = 'bold';
       if (fontMatch.isItalic) div.style.fontStyle = 'italic';
       
+      // Make text interactive only when editing
+      div.style.pointerEvents = 'auto';
+      
       div.onclick = (ev) => {
         ev.stopPropagation();
         if(activeTool !== 'edit') return;
@@ -741,21 +744,30 @@ export default function Home() {
                   className="block" 
                 />
                 
-                {/* 2. Drawing Layer */}
-                <canvas 
-                  ref={el => drawLayersRef.current[idx] = el} 
-                  className={`absolute top-0 left-0 w-full h-full ${isDrawingTool ? 'pointer-events-auto' : 'pointer-events-none'}`}
-                  onMouseDown={e => startDrawing(e, idx)}
-                  onMouseMove={e => draw(e, idx)}
-                  onMouseUp={stopDrawing}
-                  onMouseLeave={stopDrawing}
-                />
+                  {/* 2. Drawing Layer */}
+                  <canvas 
+                    ref={el => drawLayersRef.current[idx] = el} 
+                    className="absolute top-0 left-0 w-full h-full pointer-events-none"
+                  />
 
                 {/* 3. Text & Image Layer */}
                 <div 
                   ref={el => textLayersRef.current[idx] = el} 
-                  className={`absolute top-0 left-0 w-full h-full overflow-hidden ${isTextOrImageTool ? 'pointer-events-auto' : 'pointer-events-none'}`} 
-                  onClick={(e) => handlePageClick(e, idx)}
+                  className={`absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none`} 
+                />
+
+                {/* 4. Interaction Overlay (Sits on top, delegates events) */}
+                <div 
+                  className={`absolute top-0 left-0 w-full h-full ${isDrawingTool ? 'cursor-crosshair' : ''} ${activeTool === 'add-text' ? 'cursor-text' : ''}`}
+                  onMouseDown={(e) => {
+                    if (isDrawingTool) startDrawing(e, idx);
+                    else if (isTextOrImageTool) handlePageClick(e, idx);
+                  }}
+                  onMouseMove={(e) => {
+                    if (isDrawingTool) draw(e, idx);
+                  }}
+                  onMouseUp={stopDrawing}
+                  onMouseLeave={stopDrawing}
                 />
               </div>
             ))}
