@@ -45,6 +45,8 @@ export default function Home() {
   // Drawing state
   const isDrawing = useRef(false);
   const lastDrawPos = useRef({ x: 0, y: 0 });
+  const startShapePos = useRef({ x: 0, y: 0 }); // Track start for shapes
+  const snapshotBeforeShape = useRef(null); // Save canvas state before drawing shape
 
   // Helper to save state snapshot
   const saveHistorySnapshot = () => {
@@ -446,23 +448,29 @@ export default function Home() {
 
   // --- DRAWING LOGIC ---
   const startDrawing = (e, idx) => {
-    if (!['draw', 'line', 'rect', 'circle', 'triangle', 'square', 'highlight', 'eraser'].includes(activeTool)) return;
+    if (!['draw', 'line', 'rect', 'circle', 'triangle', 'highlight', 'eraser'].includes(activeTool)) return;
     isDrawing.current = true;
     const canvas = drawLayersRef.current[idx];
     const rect = canvas.getBoundingClientRect();
     
-    // Scale correction: coordinate in CSS pixels vs Canvas internal resolution
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
 
-    lastDrawPos.current = {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY
-    };
+    const startX = (e.clientX - rect.left) * scaleX;
+    const startY = (e.clientY - rect.top) * scaleY;
+
+    lastDrawPos.current = { x: startX, y: startY };
+    startShapePos.current = { x: startX, y: startY };
+    
+    // Save current canvas state to allow shape preview
+    if (['line', 'rect', 'circle', 'triangle'].includes(activeTool)) {
+      snapshotBeforeShape.current = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+    }
+  };
   };
 
   const draw = (e, idx) => {
-    if (!isDrawing.current || !['draw', 'highlight', 'eraser'].includes(activeTool)) return;
+    if (!isDrawing.current || !['draw', 'line', 'rect', 'circle', 'triangle', 'highlight', 'eraser'].includes(activeTool)) return;
     const canvas = drawLayersRef.current[idx];
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
@@ -473,25 +481,67 @@ export default function Home() {
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
     
-    ctx.beginPath();
-    if (activeTool === 'eraser') {
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.lineWidth = 30 * (canvas.width / rect.width); // Scale line width
-    } else if (activeTool === 'highlight') {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.strokeStyle = 'rgba(255, 225, 0, 0.3)';
-      ctx.lineWidth = 20 * (canvas.width / rect.width);
-    } else {
+    // For freehand tools (draw, highlight, eraser)
+    if (['draw', 'highlight', 'eraser'].includes(activeTool)) {
+      ctx.beginPath();
+      if (activeTool === 'eraser') {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.lineWidth = 30 * (canvas.width / rect.width);
+      } else if (activeTool === 'highlight') {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = 'rgba(255, 225, 0, 0.3)';
+        ctx.lineWidth = 20 * (canvas.width / rect.width);
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3 * (canvas.width / rect.width);
+      }
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.moveTo(lastDrawPos.current.x, lastDrawPos.current.y);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      lastDrawPos.current = { x, y };
+    } 
+    // For shape tools
+    else {
+      // Restore canvas to state before shape was started (to clear preview)
+      if (snapshotBeforeShape.current) {
+        ctx.putImageData(snapshotBeforeShape.current, 0, 0);
+      }
+      
       ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 3 * (canvas.width / rect.width);
+      ctx.beginPath();
+      
+      const startX = startShapePos.current.x;
+      const startY = startShapePos.current.y;
+
+      if (activeTool === 'line') {
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(x, y);
+      } else if (activeTool === 'rect') {
+        ctx.rect(startX, startY, x - startX, y - startY);
+      } else if (activeTool === 'circle') {
+        const radius = Math.sqrt(Math.pow(x - startX, 2) + Math.pow(y - startY, 2));
+        ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
+      } else if (activeTool === 'triangle') {
+        ctx.moveTo(startX + (x - startX) / 2, startY);
+        ctx.lineTo(x, y);
+        ctx.lineTo(startX, y);
+        ctx.closePath();
+      }
+      ctx.stroke();
     }
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.moveTo(lastDrawPos.current.x, lastDrawPos.current.y);
-    ctx.lineTo(x, y);
-    ctx.stroke();
-    lastDrawPos.current = { x, y };
+  };
+
+  const stopDrawing = () => { 
+    if (isDrawing.current) {
+      isDrawing.current = false; 
+      snapshotBeforeShape.current = null;
+      saveHistorySnapshot(); 
+    }
   };
 
   const stopDrawing = () => { 
