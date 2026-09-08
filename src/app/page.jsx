@@ -630,6 +630,21 @@ export default function Home() {
     return { r: r||0, g: g||0, b: b||0 };
   };
 
+  const handlePageRotate = async (idx) => {
+    if (!pdfBytes) return;
+    const { PDFDocument, degrees } = window.PDFLib;
+    const doc = await PDFDocument.load(pdfBytes);
+    const page = doc.getPages()[idx];
+    const currentRot = page.getRotation().angle;
+    page.setRotation(degrees(currentRot + 90));
+    const newBytes = await doc.save();
+    setPdfBytes(newBytes);
+    const loadingTask = window.pdfjsLib.getDocument({data: newBytes});
+    const newDoc = await loadingTask.promise;
+    setPdfDoc(newDoc);
+    toast.success("Page rotated");
+  };
+
   const handlePageDelete = async (idx) => {
     if (!pdfBytes) return;
     if (numPages <= 1) {
