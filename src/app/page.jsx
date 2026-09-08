@@ -563,14 +563,28 @@ export default function Home() {
         // 3. Export Drawings
         const drawCanvas = drawLayersRef.current[index];
         if (drawCanvas) {
-            const dataUrl = drawCanvas.toDataURL('image/png');
-            if (dataUrl.length > 500) { // Check if not empty
+            // Check if canvas is actually empty (don't embed if empty to save file size)
+            const isCanvasEmpty = () => {
+              const ctx = drawCanvas.getContext('2d');
+              const pixels = ctx.getImageData(0, 0, drawCanvas.width, drawCanvas.height).data;
+              for (let i = 0; i < pixels.length; i += 4) {
+                if (pixels[i+3] !== 0) return false; // Found non-transparent pixel
+              }
+              return true;
+            };
+
+            if (!isCanvasEmpty()) {
+                const dataUrl = drawCanvas.toDataURL('image/png');
                 const pngImage = await doc.embedPng(dataUrl);
+                
+                // Get accurate dimensions of the page including CropBox/MediaBox
+                const { width: pW, height: pH } = page.getSize();
+                
                 page.drawImage(pngImage, {
                     x: 0,
                     y: 0,
-                    width: page.getWidth(),
-                    height: page.getHeight()
+                    width: pW,
+                    height: pH
                 });
             }
         }
