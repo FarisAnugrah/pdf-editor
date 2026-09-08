@@ -4,7 +4,8 @@ import {
   Upload, Download, Type, Image as ImageIcon, 
   ArrowLeft, MousePointer2, Minus, Plus, 
   PenTool, Highlighter, Eraser, FileSignature, 
-  Layers, LayoutTemplate, Menu, Edit3
+  Layers, LayoutTemplate, Menu, Edit3,
+  Undo2, Redo2
 } from 'lucide-react';
 
 export default function Home() {
@@ -24,9 +25,107 @@ export default function Home() {
   const thumbnailsRef = useRef([]); 
   const viewportsRef = useRef([]);
 
-  // Image & Sign upload
-  const imageInputRef = useRef(null);
-  const pendingImagePos = useRef(null);
+  // History State for Undo/Redo
+  const [history, setHistory] = useState([]);
+  const [historyStep, setHistoryStep] = useState(-1);
+
+  // Helper to save state snapshot
+  const saveHistorySnapshot = () => {
+    // Only capture current visible edits/drawings
+    const snapshot = {
+      drawings: drawLayersRef.current.map(c => c ? c.toDataURL() : null),
+      // For text/images, cloning innerHTML is easiest for PoC
+      texts: textLayersRef.current.map(l => l ? l.innerHTML : '')
+    };
+    
+    const newHistory = history.slice(0, historyStep + 1);
+    newHistory.push(snapshot);
+    setHistory(newHistory);
+    setHistoryStep(newHistory.length - 1);
+  };
+
+  const handleUndo = () => {
+    if (historyStep > 0) {
+      const step = historyStep - 1;
+      restoreSnapshot(history[step]);
+      setHistoryStep(step);
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyStep < history.length - 1) {
+      const step = historyStep + 1;
+      restoreSnapshot(history[step]);
+      setHistoryStep(step);
+    }
+  };
+
+  const restoreSnapshot = (snapshot) => {
+    snapshot.drawings.forEach((dataUrl, idx) => {
+      const canvas = drawLayersRef.current[idx];
+      if (canvas && dataUrl) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const img = new window.Image(); // Use native Image
+        img.onload = () => ctx.drawImage(img, 0, 0);
+        img.src = dataUrl;
+      } else if (canvas) {
+        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+      }
+    });
+
+    snapshot.texts.forEach((html, idx) => {
+      const layer = textLayersRef.current[idx];
+      if (layer) {
+        layer.innerHTML = html;
+        // Re-attach event listeners since innerHTML destroys them
+        Array.from(layer.children).forEach(child => {
+          if (child.classList.contains('pdf-text')) {
+             child.onclick = (ev) => {
+                ev.stopPropagation();
+                if(['edit', 'add-text'].includes(activeTool)) {
+                  child.contentEditable = true;
+                  child.classList.add('editing');
+                  child.focus();
+                }
+             };
+             child.onblur = () => {
+               child.contentEditable = false;
+               child.classList.remove('editing');
+               if (child.innerText !== child.dataset.orig) child.classList.add('edited');
+               else child.classList.remove('edited');
+               saveHistorySnapshot(); // Auto save on text edit finish
+             };
+          } else if (child.classList.contains('pdf-image')) {
+            child.ondragstart = () => false;
+            child.onmousedown = (evDrag) => attachImageDragEvents(child, idx, evDrag);
+          }
+        });
+      }
+    });
+  };
+
+  const attachImageDragEvents = (img, pageIndex, evDrag) => {
+      if (activeTool !== 'edit') return;
+      let startX = evDrag.clientX - img.offsetLeft;
+      let startY = evDrag.clientY - img.offsetTop;
+      const viewport = viewportsRef.current[pageIndex];
+      
+      const onMove = (evMove) => {
+          img.style.left = (evMove.clientX - startX) + 'px';
+          img.style.top = (evMove.clientY - startY) + 'px';
+          const [newPdfX, newPdfY] = viewport.convertToPdfPoint(evMove.clientX - startX, evMove.clientY - startY);
+          img.dataset.pdfX = newPdfX;
+          img.dataset.pdfY = newPdfY;
+      };
+      const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          saveHistorySnapshot(); // Save on image move drop
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+  };
 
   // Drawing state
   const isDrawing = useRef(false);
@@ -91,6 +190,10 @@ export default function Home() {
     drawLayersRef.current = Array(doc.numPages).fill(null);
     thumbnailsRef.current = Array(doc.numPages).fill(null);
     viewportsRef.current = Array(doc.numPages).fill(null);
+    
+    // Reset History
+    setHistory([]);
+    setHistoryStep(-1);
   };
 
   useEffect(() => {
@@ -209,15 +312,25 @@ export default function Home() {
       div.onblur = () => {
         div.contentEditable = false;
         div.classList.remove('editing');
+        const oldHtml = div.innerHTML;
         if (div.innerText !== div.dataset.orig) {
           div.classList.add('edited');
         } else {
           div.classList.remove('edited');
         }
+        // Save snapshot only if content changed
+        if (oldHtml !== div.innerHTML || div.classList.contains('edited')) {
+           saveHistorySnapshot();
+        }
       };
       
       textLayer.appendChild(div);
     });
+
+    // Save initial snapshot after rendering all pages (debounced/timeout)
+    if (pageNumber === pdfDoc.numPages && historyStep === -1) {
+       setTimeout(saveHistorySnapshot, 500);
+    }
   };
 
   // --- DRAWING LOGIC ---
@@ -267,11 +380,15 @@ export default function Home() {
     ctx.moveTo(lastDrawPos.current.x, lastDrawPos.current.y);
     ctx.lineTo(x, y);
     ctx.stroke();
-    
     lastDrawPos.current = { x, y };
   };
 
-  const stopDrawing = () => { isDrawing.current = false; };
+  const stopDrawing = () => { 
+    if (isDrawing.current) {
+      isDrawing.current = false; 
+      saveHistorySnapshot(); // Capture drawing stroke
+    }
+  };
 
   // --- IMAGE / SIGN LOGIC ---
   const handleImageUpload = (e) => {
@@ -297,27 +414,10 @@ export default function Home() {
         img.style.cursor = 'move';
         
         img.ondragstart = () => false;
-        img.onmousedown = (evDrag) => {
-            if (activeTool !== 'edit') return;
-            let startX = evDrag.clientX - img.offsetLeft;
-            let startY = evDrag.clientY - img.offsetTop;
-            
-            const onMove = (evMove) => {
-                img.style.left = (evMove.clientX - startX) + 'px';
-                img.style.top = (evMove.clientY - startY) + 'px';
-                const [newPdfX, newPdfY] = viewport.convertToPdfPoint(evMove.clientX - startX, evMove.clientY - startY);
-                img.dataset.pdfX = newPdfX;
-                img.dataset.pdfY = newPdfY;
-            };
-            const onUp = () => {
-                document.removeEventListener('mousemove', onMove);
-                document.removeEventListener('mouseup', onUp);
-            };
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
-        };
+        img.onmousedown = (evDrag) => attachImageDragEvents(img, pageIndex, evDrag);
 
         textLayersRef.current[pageIndex].appendChild(img);
+        saveHistorySnapshot(); // Capture image added
     };
     reader.readAsDataURL(f);
     e.target.value = ''; 
@@ -354,7 +454,11 @@ export default function Home() {
         div.style.whiteSpace = 'nowrap';
         div.style.minWidth = '20px';
 
-        div.onblur = () => { div.contentEditable = false; div.classList.remove('editing'); };
+        div.onblur = () => { 
+          div.contentEditable = false; 
+          div.classList.remove('editing'); 
+          saveHistorySnapshot(); // Capture new text added
+        };
         div.onclick = (ev) => { 
           ev.stopPropagation(); 
           if (['edit', 'add-text'].includes(activeTool)) { 
@@ -644,6 +748,26 @@ export default function Home() {
           <div className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 rounded-md border border-transparent hover:border-slate-200 cursor-pointer transition-colors max-w-full">
             <Edit3 size={16} className="text-slate-400" />
             <span className="font-semibold text-slate-700 truncate text-sm">{fileName}</span>
+          </div>
+          
+          {/* UNDO / REDO CONTROLS */}
+          <div className="flex items-center ml-2 border-l border-slate-200 pl-4 gap-1">
+            <button 
+              onClick={handleUndo}
+              disabled={historyStep <= 0}
+              className={`p-2 rounded-md transition-colors ${historyStep <= 0 ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 hover:bg-slate-100'}`}
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo2 size={18} />
+            </button>
+            <button 
+              onClick={handleRedo}
+              disabled={historyStep >= history.length - 1}
+              className={`p-2 rounded-md transition-colors ${historyStep >= history.length - 1 ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600 hover:bg-slate-100'}`}
+              title="Redo (Ctrl+Y)"
+            >
+              <Redo2 size={18} />
+            </button>
           </div>
         </div>
 
