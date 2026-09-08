@@ -630,6 +630,31 @@ export default function Home() {
     return { r: r||0, g: g||0, b: b||0 };
   };
 
+  const handlePageDelete = async (idx) => {
+    if (!pdfBytes) return;
+    if (numPages <= 1) {
+      toast.error("Cannot delete the last page.");
+      return;
+    }
+    const confirmDelete = window.confirm(`Are you sure you want to delete page ${idx + 1}?`);
+    if (!confirmDelete) return;
+    const { PDFDocument } = window.PDFLib;
+    const doc = await PDFDocument.load(pdfBytes);
+    doc.removePage(idx);
+    const newBytes = await doc.save();
+    setPdfBytes(newBytes);
+    const loadingTask = window.pdfjsLib.getDocument({data: newBytes});
+    const newDoc = await loadingTask.promise;
+    setPdfDoc(newDoc);
+    setNumPages(newDoc.numPages);
+    pagesRef.current = Array(newDoc.numPages).fill(null);
+    textLayersRef.current = Array(newDoc.numPages).fill(null);
+    drawLayersRef.current = Array(newDoc.numPages).fill(null);
+    thumbnailsRef.current = Array(newDoc.numPages).fill(null);
+    viewportsRef.current = Array(newDoc.numPages).fill(null);
+    toast.success("Page deleted successfully");
+  };
+
   const handleSave = async () => {
     if(!pdfBytes) return;
     setIsExporting(true);
