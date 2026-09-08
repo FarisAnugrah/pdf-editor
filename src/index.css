@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.pdf-text {
+    position: absolute;
+    color: transparent; 
+    cursor: text;
+    pointer-events: auto;
+    white-space: pre;
+    transform-origin: left bottom;
+    border-radius: 2px;
+}
+.pdf-text:hover {
+    border: 1px dashed rgba(0, 120, 255, 0.4);
+    background: rgba(255,255,255,0.2);
+}
+.pdf-text.editing, .pdf-text.edited {
+    color: black;
+    background: white;
+    outline: 2px solid #0078d7;
+    border: none;
+    z-index: 10;
+}
