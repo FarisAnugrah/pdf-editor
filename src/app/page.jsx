@@ -171,6 +171,17 @@ export default function Home() {
       // Don't trigger if user is typing in a text field
       if (document.activeElement.isContentEditable) return;
       
+      // Handle deletion of active text/image/note
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        if (activeTextId) {
+          activeTextId.remove();
+          setActiveTextId(null);
+          saveHistorySnapshot();
+          toast.success("Element deleted");
+        }
+        return;
+      }
+
       switch(e.key.toLowerCase()) {
         case 'e': setActiveTool('edit'); break;
         case 't': setActiveTool('add-text'); break;
@@ -896,8 +907,8 @@ export default function Home() {
     a.href = url;
     a.download = `edited_${fileName}`;
     a.click();
-    toast.success('Document exported successfully!', { id: toastId });
-    } catch (err) {
+    toast.success("Document exported successfully!", { id: toastId });
+  } catch (err) {
       console.error(err);
       toast.error('Failed to export document.', { id: toastId });
     } finally {
