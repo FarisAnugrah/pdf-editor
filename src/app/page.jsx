@@ -140,8 +140,21 @@ export default function Home() {
       const onUp = () => {
           document.removeEventListener('mousemove', onMove);
           document.removeEventListener('mouseup', onUp);
-          saveHistorySnapshot(); // Save on image move drop
+          saveHistorySnapshot(); 
       };
+      
+      // Make image active on click so it can be deleted
+      setActiveTextId(img);
+      img.style.outline = "2px solid #0078d7";
+      
+      const clearOutline = (e) => {
+        if (e.target !== img) {
+          img.style.outline = "none";
+          document.removeEventListener('mousedown', clearOutline);
+        }
+      };
+      document.addEventListener('mousedown', clearOutline);
+
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
   };
