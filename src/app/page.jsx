@@ -209,6 +209,22 @@ export default function Home() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+  useEffect(() => {
+    const handleClearCanvas = () => {
+      drawLayersRef.current.forEach(canvas => {
+        if (canvas) {
+          const ctx = canvas.getContext('2d');
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+      });
+      saveHistorySnapshot();
+      toast.success("All drawings cleared!");
+    };
+    
+    window.addEventListener('clear-canvas', handleClearCanvas);
+    return () => window.removeEventListener('clear-canvas', handleClearCanvas);
+  }, []);
+
   const handleFileUpload = async (e) => {
     const f = e.target?.files?.[0] || e.dataTransfer?.files?.[0];
     if (!f || f.type !== 'application/pdf') {

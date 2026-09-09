@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   ArrowLeft, Download, Undo2, Redo2, Edit3,
   MousePointer2, Type, Image as ImageIcon, FileSignature, 
-  PenTool, Highlighter, Eraser, Spline, StickyNote, Square, Circle, Triangle
+  PenTool, Highlighter, Eraser, Trash2, Spline, StickyNote, Square, Circle, Triangle
 } from 'lucide-react';
 
 export default function EditorToolbar({
@@ -115,6 +115,7 @@ export default function EditorToolbar({
         <ToolButton id="triangle" icon={Triangle} label="Triangle" />
         <ToolButton id="highlight" icon={Highlighter} label="Highlight" shortcut="H" />
         <ToolButton id="eraser" icon={Eraser} label="Erase" />
+        <button onClick={() => window.dispatchEvent(new Event('clear-canvas'))} className="flex flex-col items-center justify-center w-12 h-12 rounded-lg transition-all relative group text-slate-600 hover:bg-red-50 hover:text-red-500" title="Clear All Drawings"><Trash2 size={20} strokeWidth={2} /><span className="text-[10px] mt-1 font-medium">Clear</span></button>
         <ToolButton id="sticky" icon={StickyNote} label="Note" />
       </div>
       
