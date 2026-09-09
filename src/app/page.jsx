@@ -782,6 +782,30 @@ export default function Home() {
     toast.success("Page rotated");
   };
 
+  const handleAddBlankPage = async () => {
+    if (!pdfBytes) return;
+    const { PDFDocument } = window.PDFLib;
+    const doc = await PDFDocument.load(pdfBytes);
+    const { width, height } = doc.getPage(doc.getPageCount() - 1).getSize();
+    doc.addPage([width, height]);
+    const newBytes = await doc.save();
+    setPdfBytes(newBytes);
+    const loadingTask = window.pdfjsLib.getDocument({data: newBytes});
+    const newDoc = await loadingTask.promise;
+    setPdfDoc(newDoc);
+    setNumPages(newDoc.numPages);
+    pagesRef.current = Array(newDoc.numPages).fill(null);
+    textLayersRef.current = Array(newDoc.numPages).fill(null);
+    drawLayersRef.current = Array(newDoc.numPages).fill(null);
+    thumbnailsRef.current = Array(newDoc.numPages).fill(null);
+    viewportsRef.current = Array(newDoc.numPages).fill(null);
+    toast.success("Blank page added at the end");
+    setTimeout(() => {
+      const target = document.getElementById(`page-wrapper-${newDoc.numPages - 1}`);
+      if (target) target.scrollIntoView({ behavior: 'smooth' });
+    }, 500);
+  };
+
   const handlePageDelete = async (idx) => {
     if (!pdfBytes) return;
     if (numPages <= 1) {
@@ -986,6 +1010,7 @@ export default function Home() {
           thumbnailsRef={thumbnailsRef}
           handlePageDelete={handlePageDelete}
           handlePageRotate={handlePageRotate}
+            handleAddBlankPage={handleAddBlankPage}
         />
 
         <main className="flex-1 overflow-auto flex justify-center p-8 lg:p-12 pb-32 bg-[#E5E7EB] relative scroll-smooth">
