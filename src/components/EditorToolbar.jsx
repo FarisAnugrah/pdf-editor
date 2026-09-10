@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 
 export default function EditorToolbar({
+  setFileName,
   fileName,
   setFile,
   activeTool,
@@ -57,7 +58,7 @@ export default function EditorToolbar({
         </button>
         <div className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 rounded-md border border-transparent hover:border-slate-200 cursor-pointer transition-colors max-w-full">
           <Edit3 size={16} className="text-slate-400" />
-          <span className="font-semibold text-slate-700 truncate text-sm">{fileName}</span>
+          <input type="text" value={fileName} onChange={(e) => setFileName(e.target.value)} className="font-semibold text-slate-700 bg-transparent outline-none w-full min-w-[100px] border-b border-transparent focus:border-slate-300" title="Rename file" />
         </div>
         
         <div className="flex items-center ml-2 border-l border-slate-200 pl-4 gap-1">

@@ -958,7 +958,8 @@ export default function Home() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `edited_${fileName}`;
+    const finalName = fileName.endsWith(".pdf") ? fileName : `${fileName}.pdf`;
+    a.download = `edited_${finalName}`;
     a.click();
     toast.success("Document exported successfully!", { id: toastId });
   } catch (err) {
@@ -988,6 +989,7 @@ export default function Home() {
 
       <EditorToolbar 
         fileName={fileName}
+        setFileName={setFileName}
         setFile={setFile}
         activeTool={activeTool}
         setActiveTool={setActiveTool}
